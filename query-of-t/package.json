@@ -1,0 +1,14 @@
+{
+  "name": "query-of-t",
+  "version": "0.0.1",
+  "description": "",
+  "main": "./dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {},
+  "keywords": [],
+  "author": "Olmo del Corral",
+  "license": "MIT",
+  "dependencies": {
+    "reflect-metadata": "^0.2.1"
+  }
+}

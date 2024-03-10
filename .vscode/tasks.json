@@ -1,0 +1,72 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{ /*Quote transformer*/
+			"label": "tsc: build - quote-transformer-test",
+			"type": "typescript",
+			"tsconfig": "quote-transformer-test/tsconfig.json",
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build",
+			"dependsOn": [
+				"npm install (quote-transformer-test)"
+			]
+		},
+		{
+			"label": "npm install (quote-transformer-test)",
+			"type": "npm",
+			"script": "install",
+			"options": {
+				"cwd": "${workspaceFolder}/quote-transformer-test/"
+			},
+			"dependsOn": [
+				"tsc: build (quote-transformer)"
+			]
+		},
+		{
+			"label": "tsc: build (quote-transformer)",
+			"type": "typescript",
+			"tsconfig": "quote-transformer/tsconfig.json",
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build",
+		},
+		{ /*My App*/
+			"label": "npm build (my-app)",
+			"type": "npm",
+			"script": "build",
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build",
+			"options": {
+				"cwd": "${workspaceFolder}/my-app/"
+			},
+			"dependsOn": [
+				"install my-app"
+			]
+		},
+		{
+			"label": "install my-app",
+			"type": "npm",
+			"script": "install",
+			"options": {
+				"cwd": "${workspaceFolder}/my-app/"
+			},
+			"dependsOn": [
+				"tsc: build (query-of-t)"
+			]
+		},
+		{
+			"label": "tsc: build (query-of-t)",
+			"type": "typescript",
+			"tsconfig": "query-of-t/tsconfig.json",
+			"problemMatcher": [
+				"$tsc"
+			],
+			"group": "build",
+		},
+	]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "quote-transformer",
+  "version": "0.0.2",
+  "main": "./dist/transformerFactory.js",
+  "description": "TypeScript transforms that is able to convert any arrow-function assigned to a Quote<T> into a AST that can be consumed at run-time. This enables libraries like query-of-t to translate natural query expressions into SQL. Much like LINQ to SQL / Entity Framework but for node.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "typescript",
+    "transformer",
+    "ast",
+    "linq",
+    "expression",
+    "tree",
+    "quote",
+    "lambda",
+    "entity framework",
+    "ef",
+    "linq to sql",
+    "sql server",
+    "postgresql"
+  ],
+  "author": "Olmo del Corral",
+  "license": "MIT",
+  "dependencies": {
+    "ts-patch": "^3.1.2",
+    "typescript": "^5.3.3"
+  }
+}

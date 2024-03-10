@@ -1,0 +1,32 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Debug Transformer Test",
+            "preLaunchTask": "tsc: build - quote-transformer-test",
+            "program": "${workspaceFolder}/quote-transformer-test/lib/initTransformer.js",
+            "cwd": "${workspaceFolder}/quote-transformer-test/",
+            "outFiles": [
+                "${workspaceFolder}/quote-transformer-test/**/*.js"
+            ],
+            "sourceMaps": true
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Debug My App",
+            "preLaunchTask": "npm build (my-app)",
+            "program": "${workspaceFolder}/my-app/dist/queryExamples.js",
+            "cwd": "${workspaceFolder}/my-app/",
+            "outFiles": [
+                "${workspaceFolder}/my-app/**/*.js"
+            ],
+            "sourceMaps": true
+        }
+    ]
+}

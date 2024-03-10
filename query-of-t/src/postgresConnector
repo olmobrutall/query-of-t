@@ -1,0 +1,15 @@
+import { Connector } from "./table"
+import { Client } from 'pg'
+
+class PostgresConnector extends Connector {
+    async executeQuery(sql: string, parameters: unknown[]): Promise<unknown[]> {
+        const client = new Client()
+        await client.connect()
+
+        const res = await client.query(sql, parameters)
+
+        await client.end();
+
+        return res;
+    }
+}

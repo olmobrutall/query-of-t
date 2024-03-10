@@ -1,0 +1,19 @@
+{
+    "name": "my-app",
+    "version": "1.0.0",
+    "description": "",
+    "scripts": {
+        "build": "tsc --build"
+    },
+    "author": "Olmo del Corral",
+    "license": "MIT",
+    "workspaces": [
+        "quote-transformer",
+        "query-of-t",
+        "my-app"
+    ],
+    "dependencies": {
+        "pg": "^8.11.3",
+        "typescript": "^5.3.3"
+    }
+}
