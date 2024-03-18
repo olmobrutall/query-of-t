@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { Entity } from "./table";
 import { Type, LiteralType, ArrayType, NewType } from "./types";
-import { ExLambda } from "quote-transformer/lib/quoted";
+import { ExLambda, Quoted } from "quote-transformer/lib/quoted";
 
 
 export class TableInfo {
@@ -22,16 +22,14 @@ export function column(options?: { columnName?: string; type?: Type }) {
         // Retrieve existing columns from metadata or create an empty array
         const tableInfo: TableInfo = Reflect.getMetadata('tableInfo', target) || new TableInfo();
 
-        var tsType = Reflect.getMetadata('design:type', target, key);
-
         var ci: ColumnInfo = {
             columnName: options?.columnName ?? key,
-            type: options?.type ?? toRuntimeType(tsType)!,
+            type: options!.type!,
         };
 
         tableInfo.columns[key] = ci;
 
-        Reflect.defineMetadata('columns', tableInfo, target);
+        Reflect.defineMetadata('tableInfo', tableInfo, target);
     };
 }
 
@@ -41,7 +39,7 @@ export function quoted(exp?: () => ExLambda) {
         if (exp == undefined)
             throw new Error(`Unable to add the quoted expression to "${target.name}". Are you using ts-path and quote-transformer?`);
 
-        Reflect.defineMetadata('quoted', exp, target);
+        Reflect.defineMetadata('quoted', exp, target, key);
     };
 }
 
@@ -53,7 +51,7 @@ export function lambdaType(paramNumber: number, typeResolver: LambdaTypeResolver
         var lambdaParams = (Reflect.getMetadata('lambdaParams', target) ?? []) as LambdaTypeResolver[];
         lambdaParams[paramNumber] = typeResolver;
 
-        Reflect.defineMetadata('lambdaParams', lambdaParams, target);
+        Reflect.defineMetadata('lambdaParams', lambdaParams, target, key);
     };
 }
 
@@ -61,23 +59,13 @@ export type ResultTypeResolver = (objectType: Type, ...argsTypes: Type[]) => Typ
 
 export function resultType(typeResolver: ResultTypeResolver) {
     return function (target: any, key: string) {
-        Reflect.defineMetadata('resultType', typeResolver, target);
+        Reflect.defineMetadata('resultType', typeResolver, target, key);
     };
 }
 
 
-function toRuntimeType(tsTyp: any): Type | undefined {
-
-    if (tsTyp == "boolean")
-        return LiteralType.boolean;
-    if (tsTyp == "number")
-        return LiteralType.number;
-    if (tsTyp == "string")
-        return LiteralType.string;
-    if (tsTyp == Array)
-        return undefined;
-    if (tsTyp == Object)
-        return undefined;
-    return new NewType(tsTyp);
+export interface StaticFunction {
+    __lambdaType?: LambdaTypeResolver[];
+    __resultType?: ResultTypeResolver;
+    __quoted?: Quoted<Function>;
 }
-

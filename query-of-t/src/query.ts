@@ -372,23 +372,23 @@ export class OrderedQuery<T> extends Query<T> {
 
     @lambdaType(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => ot)
-    thenBy(selector: Quoted<(value: T) => unknown>): Query<T> {
+    thenBy(selector: Quoted<(value: T) => unknown>): OrderedQuery<T> {
         var lambda = Expression.fromQuotedLambda(selector, [this.elementType]);
         var call = new CallExpression(
             new PropertyExpression(this.expression, "thenBy"),
             [lambda],
             this.type);
-        return new Query<T>(call, this.translator);
+        return new OrderedQuery<T>(call, this.translator);
     }
 
     @lambdaType(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => ot)
-    thenByDescending(selector: Quoted<(value: T) => unknown>): Query<T> {
+    thenByDescending(selector: Quoted<(value: T) => unknown>): OrderedQuery<T> {
         var lambda = Expression.fromQuotedLambda(selector, [this.elementType]);
         var call = new CallExpression(
             new PropertyExpression(this.expression, "thenByDescending"),
             [lambda],
             this.type);
-        return new Query<T>(call, this.translator);
+        return new OrderedQuery<T>(call, this.translator);
     }
 }

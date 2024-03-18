@@ -11,7 +11,9 @@ export class ArrayType extends Type {
 }
 
 export class FunctionType extends Type {
-    constructor(public readonly returnType: Type) {
+    constructor(
+        public readonly func: Function | undefined,
+        public readonly returnType: Type) {
         super()
     }
 }
@@ -29,7 +31,7 @@ export class LiteralType extends Type {
 }
 
 export class NewType extends Type {
-    constructor(public readonly consturctorFunction: Function) {
+    constructor(public readonly constructorFunction: Function) {
         super()
     }
 }

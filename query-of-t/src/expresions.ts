@@ -2,7 +2,7 @@ import { isOptionalChain } from "typescript";
 import { ExLambda, OpBinary, OpUnary, Quoted, QuotedEx, ExParam } from 'quote-transformer/lib/quoted';
 import { ArrayType, FunctionType as FunctionType, LiteralType, NewType, ObjectType, Type } from "./types";
 import { OrderedQuery, Query } from "./query";
-import { LambdaTypeResolver, ResultTypeResolver } from "./decorators";
+import { LambdaTypeResolver, ResultTypeResolver, StaticFunction } from "./decorators";
 
 type Visitor = (e: Expression) => Expression;
 
@@ -29,6 +29,13 @@ export abstract class Expression {
             switch (q[0]) {
                 case "c":
                     return new ConstantExpression(q[1]);
+                case "p": {
+                    const exp = bindings.get(q);
+                    if (exp == null)
+                        throw new Error("Unbound parameter found:" + q[1]);
+
+                    return exp
+                }
                 case "+u":
                 case "-u":
                 case "~":
@@ -86,64 +93,74 @@ export abstract class Expression {
                     {
                         const fun = fromQuoted(q[1]);
                         const args = q[2];
+
+                        let sf: StaticFunction;
+                        let obj: Expression | undefined;
                         if (fun instanceof PropertyExpression) {
-
-
-                            const obj = fun.object;
+                            obj = fun.object;
                             const type = obj.type instanceof ArrayType ? OrderedQuery :
-                                obj.type instanceof NewType ? obj.type.consturctorFunction :
+                                obj.type instanceof NewType ? obj.type.constructorFunction.prototype :
                                     undefined;
 
                             if (type == undefined)
                                 throw new Error(`Unexpected object type when calling ${fun.propertyName}`);
 
-                            const getLambdaType = Reflect.getMetadata("lambdaType", type, fun.propertyName) as LambdaTypeResolver[] | undefined;
+                            const metadataKeys = Reflect.getMetadataKeys(type, fun.propertyName);
+                            sf = {
+                                __lambdaType: Reflect.getMetadata("lambdaType", type, fun.propertyName) as LambdaTypeResolver[] | undefined,
+                                __quoted: Reflect.getMetadata("quoted", type, fun.propertyName) as (() => ExLambda) | undefined,
+                                __resultType: Reflect.getMetadata("resultType", type, fun.propertyName) as ResultTypeResolver | undefined
+                            };
+                        } else if (fun instanceof ConstantExpression) {
+                            sf = fun.type as StaticFunction;
+                        }
+                        else
+                            throw new Error("Unable to call function on node " + fun.toString());
 
-                            const argsExp: Expression[] = [];
-                            for (let i = 0; i < args.length; i++) {
-                                const a = args[i];
-                                if (a[0] == "=>") {
-                                    const resolver = getLambdaType?.[i];
+                        const argsExp: Expression[] = [];
+                        for (let i = 0; i < args.length; i++) {
+                            const a = args[i];
+                            if (a[0] == "=>") {
+                                const resolver = sf.__lambdaType?.[i];
 
-                                    if (resolver == null)
-                                        throw new Error(`Missing @lambdaType docorator '${fun.propertyName}' for argument '${i}'`);
+                                if (resolver == null)
+                                    throw new Error(`Missing @lambdaType docorator '${fun.propertyName}' for argument '${i}'`);
 
-                                    const paramTypes = resolver(fun.object.type, ...argsExp.map(a => a.type));
+                                const paramTypes = resolver(fun.object.type, ...argsExp.map(a => a.type));
 
-                                    argsExp[i] = fromQuoted(a, paramTypes);
-                                }
-                                else {
-                                    argsExp[i] = fromQuoted(a);
-                                }
+                                argsExp[i] = fromQuoted(a, paramTypes);
                             }
-
-                            const quoted = Reflect.getMetadata("quoted", type, fun.propertyName) as (() => ExLambda) | undefined;
-                            if (quoted) {
-
-                                const lambda = quoted();
-
-                                if (lambda[0] != "=>")
-                                    throw new Error("Unexpected non-lambda");
-
-                                lambda[1].forEach((p, i) => bindings.set(p, i == 0 ? obj : argsExp[i - 1]));
-                                var body = fromQuoted(lambda[2]);
-                                lambda[1].forEach((p, i) => bindings.delete(p));
-                                return body;
+                            else {
+                                argsExp[i] = fromQuoted(a);
                             }
-
-                            const getResultType = Reflect.getMetadata("resultType", type, fun.propertyName) as ResultTypeResolver | undefined;
-                            if (getResultType == null)
-                                throw new Error(`Missing @resultType or @quoted docorator in function '${fun.propertyName}'`);
-
-                            const resultType = getResultType(fun.object.type, ...argsExp.map(a => a.type));
-                            return new CallExpression(fun, argsExp, resultType);
-
                         }
 
-                        throw new Error("Unable to call function on node " + fun.toString());
+                        if (quoted) {
+
+                            const lambda = quoted();
+
+                            if (lambda[0] != "=>")
+                                throw new Error("Unexpected non-lambda");
+
+                            lambda[1].forEach((p, i) => bindings.set(p, i == 0 ? obj : argsExp[i - 1]));
+                            var body = fromQuoted(lambda[2]);
+                            lambda[1].forEach((p, i) => bindings.delete(p));
+                            return body;
+                        }
+
+                        const getResultType = ;
+                        if (getResultType == null)
+                            throw new Error(`Missing @resultType or @quoted docorator in function '${fun.propertyName}'`);
+
+                        const resultType = getResultType(fun.object.type, ...argsExp.map(a => a.type));
+                        return new CallExpression(fun, argsExp, resultType);
+
+
+
+
                     }
                 case "=>":
-                    var params = q[1].map((p, i) => new ParameterExpression(p[1], types[i]));
+                    var params = q[1].map((p, i) => new ParameterExpression(p[1], lambdaArgTypes![i]));
 
                     q[1].forEach((p, i) => bindings.set(p, params[i]));
                     var body = fromQuoted(q[2]);
@@ -200,7 +217,6 @@ export class ConstantExpression extends Expression {
             return LiteralType.null;
         if (typeof value === "number")
             return LiteralType.number;
-
         if (typeof value === "string")
             return LiteralType.string;
         if (typeof value === "boolean")
@@ -210,6 +226,9 @@ export class ConstantExpression extends Expression {
                 return new ObjectType({});
 
             return new NewType((value as {}).constructor);
+        }
+        if (typeof value === "function") {
+            return new FunctionType(value, LiteralType.null/* unknown */);
         }
 
         throw new Error("Unexpected");
@@ -462,7 +481,7 @@ export class LambdaExpression extends Expression {
         public readonly parameters: ParameterExpression[],
         public readonly body: Expression
     ) {
-        super("=>", new FunctionType(body.type));
+        super("=>", new FunctionType(undefined, body.type));
     }
 
     toString(): string {

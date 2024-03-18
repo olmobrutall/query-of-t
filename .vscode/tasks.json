@@ -10,11 +10,11 @@
 			],
 			"group": "build",
 			"dependsOn": [
-				"npm install (quote-transformer-test)"
+				"tsc: build (quote-transformer)" //"install (quote-transformer-test)"
 			]
 		},
 		{
-			"label": "npm install (quote-transformer-test)",
+			"label": "install (quote-transformer-test)",
 			"type": "npm",
 			"script": "install",
 			"options": {

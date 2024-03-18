@@ -1,21 +1,26 @@
+import { LambdaTypeResolver, StaticFunction, resultType } from "./decorators";
 import { CallExpression, ConstantExpression, Expression } from "./expresions";
 import { IQueryTranslator, Query } from "./query";
-import { ArrayType, NewType } from "./types";
+import { ArrayType, FunctionType, NewType, Type } from "./types";
 import { expressionSimplifier } from "./visitors/expressionSimplifier";
 
 export abstract class Entity {
 
 }
 
-export function table<T extends Entity>(entityType: { new(): T }): Query<T> {
-    var callExpression = new CallExpression(
-        new ConstantExpression(table),
-        [new ConstantExpression(entityType)],
-        new ArrayType(new NewType(entityType))
 
+export function table<T extends Entity>(entityType: { new(): T }): Query<T> {
+    var arrayType = new ArrayType(new NewType(entityType));
+    var callExpression = new CallExpression(
+        new ConstantExpression(table, new FunctionType(table, arrayType)),
+        [new ConstantExpression(entityType, new FunctionType(entityType, new NewType(entityType)))],
+        arrayType
     );
     return new Query<T>(callExpression, MyQueryTranslator.instance);
 }
+
+(table as StaticFunction).__resultType = (_, entityTypeType) => new ArrayType(new NewType((entityTypeType as FunctionType).func!));
+
 
 class MyQueryTranslator implements IQueryTranslator {
 
