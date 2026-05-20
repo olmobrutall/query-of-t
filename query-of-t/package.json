@@ -8,7 +8,5 @@
   "keywords": [],
   "author": "Olmo del Corral",
   "license": "MIT",
-  "dependencies": {
-    "reflect-metadata": "^0.2.1"
-  }
+  "dependencies": {}
 }

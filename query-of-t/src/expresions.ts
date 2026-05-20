@@ -94,11 +94,11 @@ export abstract class Expression {
                         const fun = fromQuoted(q[1]);
                         const args = q[2];
 
-                        let sf: StaticFunction;
+                        let sf: StaticFunction<Function>;
                         let obj: Expression | undefined;
                         if (fun instanceof PropertyExpression) {
                             obj = fun.object;
-                            const type = obj.type instanceof ArrayType ? OrderedQuery :
+                            const type = obj.type instanceof ArrayType ? OrderedQuery.prototype :
                                 obj.type instanceof NewType ? obj.type.constructorFunction.prototype :
                                     undefined;
 
@@ -107,12 +107,12 @@ export abstract class Expression {
 
                             const metadataKeys = Reflect.getMetadataKeys(type, fun.propertyName);
                             sf = {
-                                __lambdaType: Reflect.getMetadata("lambdaType", type, fun.propertyName) as LambdaTypeResolver[] | undefined,
-                                __quoted: Reflect.getMetadata("quoted", type, fun.propertyName) as (() => ExLambda) | undefined,
+                                __lambdaType: Reflect.getMetadata("lambdaParams", type, fun.propertyName) as LambdaTypeResolver[] | undefined,
+                                __quoted: (Reflect.getMetadata("quoted", type, fun.propertyName) as (() => ExLambda) | undefined)?.(),
                                 __resultType: Reflect.getMetadata("resultType", type, fun.propertyName) as ResultTypeResolver | undefined
                             };
                         } else if (fun instanceof ConstantExpression) {
-                            sf = fun.type as StaticFunction;
+                            sf = fun.value as StaticFunction<Function>;
                         }
                         else
                             throw new Error("Unable to call function on node " + fun.toString());
@@ -124,9 +124,12 @@ export abstract class Expression {
                                 const resolver = sf.__lambdaType?.[i];
 
                                 if (resolver == null)
-                                    throw new Error(`Missing @lambdaType docorator '${fun.propertyName}' for argument '${i}'`);
+                                    throw new Error(
+                                        fun instanceof PropertyExpression ? `Missing @lambdaType docorator '${fun.propertyName}' for argument '${i}'` :
+                                            fun instanceof ConstantExpression ? `Missing __lambdaType property for '${(fun.value as Function).name}' for argument '${i}'` :
+                                                "Unexpected");
 
-                                const paramTypes = resolver(fun.object.type, ...argsExp.map(a => a.type));
+                                const paramTypes = resolver(obj?.type ?? LiteralType.null, ...argsExp.map(a => a.type));
 
                                 argsExp[i] = fromQuoted(a, paramTypes);
                             }
@@ -135,29 +138,29 @@ export abstract class Expression {
                             }
                         }
 
-                        if (quoted) {
+                        if (sf.__quoted) {
 
-                            const lambda = quoted();
+                            const lambda = sf.__quoted as ExLambda;
 
                             if (lambda[0] != "=>")
                                 throw new Error("Unexpected non-lambda");
 
-                            lambda[1].forEach((p, i) => bindings.set(p, i == 0 ? obj : argsExp[i - 1]));
+                            lambda[1].forEach((p, i) => bindings.set(p, i == 0 ? obj! : argsExp[i - 1]));
                             var body = fromQuoted(lambda[2]);
                             lambda[1].forEach((p, i) => bindings.delete(p));
                             return body;
                         }
 
-                        const getResultType = ;
+                        const getResultType = sf.__resultType;
                         if (getResultType == null)
-                            throw new Error(`Missing @resultType or @quoted docorator in function '${fun.propertyName}'`);
+                            throw new Error(
+                                fun instanceof PropertyExpression ? `Missing @resultType or @quoted docorator in function '${fun.propertyName}'` :
+                                    fun instanceof ConstantExpression ? `Missing __resultType property in function ''${(fun.value as Function).name}'` :
+                                        "Unexpected"
+                            );
 
-                        const resultType = getResultType(fun.object.type, ...argsExp.map(a => a.type));
+                        const resultType = getResultType(obj?.type ?? LiteralType.null, ...argsExp.map(a => a.type));
                         return new CallExpression(fun, argsExp, resultType);
-
-
-
-
                     }
                 case "=>":
                     var params = q[1].map((p, i) => new ParameterExpression(p[1], lambdaArgTypes![i]));
@@ -305,6 +308,8 @@ export class BinaryExpression extends Expression {
             case "<=":
             case ">":
             case ">=":
+            case "==":
+            case "!=":
                 return LiteralType.boolean;
             case "&&":
             case "||":

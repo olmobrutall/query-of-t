@@ -1,12 +1,9 @@
-import { LambdaTypeResolver, StaticFunction, resultType } from "./decorators";
+import { LambdaTypeResolver, StaticFunction, asStaticFunction, resultType } from "./decorators";
 import { CallExpression, ConstantExpression, Expression } from "./expresions";
 import { IQueryTranslator, Query } from "./query";
 import { ArrayType, FunctionType, NewType, Type } from "./types";
 import { expressionSimplifier } from "./visitors/expressionSimplifier";
 
-export abstract class Entity {
-
-}
 
 
 export function table<T extends Entity>(entityType: { new(): T }): Query<T> {
@@ -19,8 +16,7 @@ export function table<T extends Entity>(entityType: { new(): T }): Query<T> {
     return new Query<T>(callExpression, MyQueryTranslator.instance);
 }
 
-(table as StaticFunction).__resultType = (_, entityTypeType) => new ArrayType(new NewType((entityTypeType as FunctionType).func!));
-
+asStaticFunction(table).__resultType = (_, entityTypeType) => new ArrayType(new NewType((entityTypeType as FunctionType).func!));
 
 class MyQueryTranslator implements IQueryTranslator {
 
@@ -41,9 +37,6 @@ class MyQueryTranslator implements IQueryTranslator {
         throw new Error("Not implemented");
     }
 }
-
-
-
 
 class TranslateResult {
 

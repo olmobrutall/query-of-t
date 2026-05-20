@@ -4,6 +4,28 @@ import { Type, LiteralType, ArrayType, NewType } from "./types";
 import { ExLambda, Quoted } from "quote-transformer/lib/quoted";
 
 
+export class ObjectName {
+    constructor(
+        public readonly name: string,
+        public readonly schema: SchemaName) {
+    }
+}
+
+export class SchemaName {
+    constructor(
+        public readonly name: string,
+        public readonly database: DatabaseName
+    ) {
+    }
+}
+
+export class DatabaseName {
+    constructor(
+        public readonly name: string,
+    ) {
+    }
+}
+
 export class TableInfo {
 
     constructor() {
@@ -43,7 +65,7 @@ export function quoted(exp?: () => ExLambda) {
     };
 }
 
-export type LambdaTypeResolver = (objectType: Type, ...argsTypes: Type[]) => Type[];
+export type LambdaTypeResolver = (thisType: Type, ...argsTypes: Type[]) => Type[];
 
 export function lambdaType(paramNumber: number, typeResolver: LambdaTypeResolver) {
     return function (target: any, key: string) {
@@ -55,7 +77,7 @@ export function lambdaType(paramNumber: number, typeResolver: LambdaTypeResolver
     };
 }
 
-export type ResultTypeResolver = (objectType: Type, ...argsTypes: Type[]) => Type;
+export type ResultTypeResolver = (thisType: Type, ...argsTypes: Type[]) => Type;
 
 export function resultType(typeResolver: ResultTypeResolver) {
     return function (target: any, key: string) {
@@ -64,8 +86,12 @@ export function resultType(typeResolver: ResultTypeResolver) {
 }
 
 
-export interface StaticFunction {
+export interface StaticFunction<T extends Function> {
     __lambdaType?: LambdaTypeResolver[];
     __resultType?: ResultTypeResolver;
-    __quoted?: Quoted<Function>;
+    __quoted?: Quoted<T>;
+}
+
+export function asStaticFunction<T extends Function>(func: T): StaticFunction<T> {
+    return func as any as StaticFunction<T>;
 }

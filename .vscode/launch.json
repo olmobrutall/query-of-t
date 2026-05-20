@@ -11,9 +11,9 @@
             "preLaunchTask": "tsc: build - quote-transformer-test",
             "program": "${workspaceFolder}/quote-transformer-test/lib/initTransformer.js",
             "cwd": "${workspaceFolder}/quote-transformer-test/",
-            "outFiles": [
-                "${workspaceFolder}/quote-transformer-test/**/*.js"
-            ],
+            // "outFiles": [
+            //     "${workspaceFolder}/quote-transformer-test/**/*.js"
+            // ],
             "sourceMaps": true
         },
         {
@@ -23,9 +23,10 @@
             "preLaunchTask": "npm build (my-app)",
             "program": "${workspaceFolder}/my-app/dist/queryExamples.js",
             "cwd": "${workspaceFolder}/my-app/",
-            "outFiles": [
-                "${workspaceFolder}/my-app/**/*.js"
-            ],
+            // "outFiles": [
+            //     "${workspaceFolder}/my-app/**/*.js",
+            //     "${workspaceFolder}/quote-of-t/**/*.js"
+            // ],
             "sourceMaps": true
         }
     ]
