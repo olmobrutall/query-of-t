@@ -1,5 +1,5 @@
 import { isOptionalChain } from "typescript";
-import { ExLambda, OpBinary, OpUnary, Quoted, QuotedEx, ExParam } from 'quote-transformer/lib/quoted';
+import { ExLambda, OpBinary, OpUnary, Quoted, QuotedEx, ExParam } from 'quote-transformer/quoted';
 import { ArrayType, FunctionType as FunctionType, LiteralType, NewType, ObjectType, Type } from "./types";
 import { OrderedQuery, Query } from "./query";
 import { LambdaTypeResolver, ResultTypeResolver, StaticFunction } from "./decorators";

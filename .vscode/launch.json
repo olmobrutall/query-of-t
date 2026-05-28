@@ -9,7 +9,7 @@
             "request": "launch",
             "name": "Debug Transformer Test",
             "preLaunchTask": "tsc: build - quote-transformer-test",
-            "program": "${workspaceFolder}/quote-transformer-test/lib/initTransformer.js",
+            "program": "${workspaceFolder}/quote-transformer-test/dist/initTransformer.js",
             "cwd": "${workspaceFolder}/quote-transformer-test/",
             // "outFiles": [
             //     "${workspaceFolder}/quote-transformer-test/**/*.js"

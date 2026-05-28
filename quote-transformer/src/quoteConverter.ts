@@ -51,7 +51,17 @@ export function getQuoteConverter(tsInstance: typeof ts2) {
         return undefined;
     }
 
-    function unaryOperatorLiteral(sk: ts2.PrefixUnaryOperator) {
+    // function postfixUnaryOperatorLiteral(sk: ts2.PostfixUnaryOperator) {
+    //     switch (sk) {
+
+    //         case ts.SyntaxKind.PlusPlusToken: return "++";
+    //         case ts.SyntaxKind.MinusMinusToken: return "--";
+    //     }
+
+    //     return undefined;
+    // }
+
+    function prefixUnaryOperatorLiteral(sk: ts2.PrefixUnaryOperator) {
         switch (sk) {
 
             case ts.SyntaxKind.PlusToken: return "+u";
@@ -88,23 +98,23 @@ export function getQuoteConverter(tsInstance: typeof ts2) {
 
         if (ts.isPostfixUnaryExpression(node)) {
 
-            const literal = unaryOperatorLiteral(node.operator);
-            if (literal == null)
-                return new QuoteError(node, "Unable to quote postfix unary operator " + ts.tokenToString(node.operator));
+            //const literal = postfixUnaryOperatorLiteral(node.operator);
+            //if (literal == null)
+            return new QuoteError(node, "Unable to quote postfix unary operator " + ts.tokenToString(node.operator));
 
-            const operand = quoteExpression(node.operand, idents);
-            if (operand instanceof QuoteError)
-                return operand;
+            // const operand = quoteExpression(node.operand, idents);
+            // if (operand instanceof QuoteError)
+            //     return operand;
 
-            return ts.factory.createArrayLiteralExpression([
-                ts.factory.createStringLiteral(literal),
-                operand,
-            ]);
+            // return ts.factory.createArrayLiteralExpression([
+            //     ts.factory.createStringLiteral(literal),
+            //     operand,
+            // ]);
         }
 
         if (ts.isPrefixUnaryExpression(node)) {
 
-            const literal = unaryOperatorLiteral(node.operator);
+            const literal = prefixUnaryOperatorLiteral(node.operator);
             if (literal == null)
                 return new QuoteError(node, "Unable to quote postfix unary operator " + ts.tokenToString(node.operator));
 

@@ -1,4 +1,4 @@
-import { Quoted } from "quote-transformer/lib/quoted";
+import { Quoted } from "quote-transformer/quoted";
 import { Query } from "../query";
 import { table } from "../table";
 
@@ -8,22 +8,23 @@ export interface Lite<T> {
 
 export abstract class Entity {
 
-    static implement<T, M extends keyof T, R>(this: { new(): T }, methodName: M, quoted: Quoted<(this: T) =>  GetReturnType<T[M]>) {
-        this.prototype.
-    }
+    // static implement<T, M extends keyof T, R>(this: { new(): T }, methodName: M, quoted: Quoted<(this: T) =>  GetReturnType<T[M]>) {
+    //     this.prototype.
+    // }
 
 }
 
-type GetReturnType<T> = T extends (...args: any) => infer R ? R : never;
+// type GetReturnType<T> = T extends (...args: any) => infer R ? R : never;
 
 
 export class UserEntity extends Entity {
-    orders2(): Query<OrderEntity>;
+
+    orders(): Query<OrderEntity> =
 
 }
 
 export class OrderEntity extends Entity {
-    user: UserEntity;
+    user: UserEntity = null!;
 }
 
 export interface UserEntity {
@@ -36,6 +37,3 @@ UserEntity.implement("orders", () => table(OrderEntity).filter(o => o.user == th
 
 
 registerExpression(UserEntity, "orders",)
-UserEntity.prototype.orders = function (this: UserEntity) {
-
-}

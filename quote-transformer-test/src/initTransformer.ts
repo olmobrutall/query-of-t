@@ -1,10 +1,10 @@
 // Import necessary TypeScript Compiler API modules
 import * as ts from 'typescript';
 import * as fs from "fs";
-import transformerFactory from 'quote-transformer/lib/transformerFactory';
+import transformerFactory from 'quote-transformer';
 
 console.log('Current Working Directory:', process.cwd());
-
+debugger;
 const fileToConvert = './examples/codeExamples.before.ts';
 if (!fs.existsSync(fileToConvert))
   throw new Error("File not found:" + fileToConvert);

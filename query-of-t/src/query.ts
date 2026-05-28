@@ -1,4 +1,4 @@
-import { Quoted } from "quote-transformer/lib/quoted";
+import { Quoted } from "quote-transformer/quoted";
 import { CallExpression, ConstantExpression, Expression, LambdaExpression, PropertyExpression } from "./expresions";
 import { ArrayType, LiteralType as SimpleType, NewType, Type, FunctionType, ObjectType } from "./types";
 import { lambdaType, resultType } from "./decorators";

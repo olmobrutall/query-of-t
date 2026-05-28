@@ -175,7 +175,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
         return ts.visitEachChild(node, visit, ctx);
       }
 
-      return ts.visitNode<ts.SourceFile, any>(sourceFile, visit);
+      return ts.visitNode(sourceFile, visit) as ts.SourceFile;
 
     };
   };

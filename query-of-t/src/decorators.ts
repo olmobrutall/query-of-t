@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import { Entity } from "./table";
 import { Type, LiteralType, ArrayType, NewType } from "./types";
-import { ExLambda, Quoted } from "quote-transformer/lib/quoted";
+import { ExLambda, Quoted } from "quote-transformer/quoted";
 
 
 export class ObjectName {
