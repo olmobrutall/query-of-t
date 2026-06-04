@@ -11,6 +11,27 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     return type.aliasSymbol?.name == "Quoted" && type.aliasTypeArguments?.length == 1;
   }
 
+  function isQuoteTypedLValue(node: ts.Expression, typeChecker: ts.TypeChecker): boolean {
+    const symbol = typeChecker.getSymbolAtLocation(node);
+    if (symbol?.declarations != null) {
+      for (const declaration of symbol.declarations) {
+        if (
+          (ts.isVariableDeclaration(declaration) ||
+            ts.isPropertyDeclaration(declaration) ||
+            ts.isParameter(declaration) ||
+            ts.isPropertySignature(declaration)) &&
+          declaration.type != null
+        ) {
+          const declaredType = typeChecker.getTypeFromTypeNode(declaration.type);
+          if (isQuoteOfT(declaredType))
+            return true;
+        }
+      }
+    }
+
+    return isQuoteOfT(typeChecker.getTypeAtLocation(node));
+  }
+
   function assignedToQuoteOfT(node: ts.ArrowFunction, typeChecker: ts.TypeChecker): boolean {
 
     if (node.parent == null)
@@ -29,6 +50,27 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
       var paramType = signature.getTypeParameterAtPosition(index);
 
       return isQuoteOfT(paramType);
+    }
+
+    if (
+      ts.isBinaryExpression(node.parent) &&
+      node.parent.operatorToken.kind == ts.SyntaxKind.EqualsToken &&
+      node.parent.right === node
+    ) {
+      return isQuoteTypedLValue(node.parent.left, typeChecker);
+    }
+
+    if (ts.isVariableDeclaration(node.parent) && node.parent.initializer === node) {
+      const declaredType = node.parent.type != null
+        ? typeChecker.getTypeFromTypeNode(node.parent.type)
+        : typeChecker.getTypeAtLocation(node.parent.name);
+
+      return isQuoteOfT(declaredType);
+    }
+
+    if (ts.isPropertyDeclaration(node.parent) && node.parent.initializer === node && node.parent.type != null) {
+      const declaredType = typeChecker.getTypeFromTypeNode(node.parent.type);
+      return isQuoteOfT(declaredType);
     }
 
     return false;

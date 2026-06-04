@@ -86,5 +86,7 @@ Person.prototype.isMillenial = withQuoted(function (this: Person) {
     return 1981 <= this.dateOfBirth.getFullYear() && this.dateOfBirth.getFullYear() <= 1996;
 });
 
+var nonEmpty: Quoted<(a: string) => boolean> = (a: string) => a.length > 0;
+
 var p = new Person();
 console.log(p.isMillenial());

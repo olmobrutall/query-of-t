@@ -4,27 +4,27 @@ import * as fs from "fs";
 import transformerFactory from 'quote-transformer';
 
 console.log('Current Working Directory:', process.cwd());
-debugger;
-const fileToConvert = './examples/codeExamples.before.ts';
-if (!fs.existsSync(fileToConvert))
-  throw new Error("File not found:" + fileToConvert);
+const sourceFilePath = './examples/codeExamples.source.ts';
+const transformedFilePath = './examples/codeExamples.transformed.ts';
+if (!fs.existsSync(sourceFilePath))
+  throw new Error("File not found:" + sourceFilePath);
 
 // Create a program using the TypeScript Compiler API
-const program = ts.createProgram([fileToConvert], {
+const program = ts.createProgram([sourceFilePath], {
   target: ts.ScriptTarget.ESNext,
   module: ts.ModuleKind.CommonJS,
 });
 
 // Get the source file you want to transform
-const sourceFile = program.getSourceFile(fileToConvert);
+const sourceFile = program.getSourceFile(sourceFilePath);
 
 var printer = ts.createPrinter();
 
-console.log("BEFORE");
+console.log("SOURCE");
 console.log(printer.printFile(sourceFile!));
 
 
-console.log("AFTER")
+console.log("TRANSFORMED")
 var transformer = transformerFactory(program, undefined, {
   ts,
   addDiagnostic: (d: ts.Diagnostic) => {
@@ -37,4 +37,7 @@ var transformer = transformerFactory(program, undefined, {
 const transformedSourceFile = ts.transform(sourceFile!, [transformer]).transformed[0];
 
 // Print the transformed source file
-console.log(printer.printFile(transformedSourceFile));
+const transformedCode = printer.printFile(transformedSourceFile);
+console.log(transformedCode);
+fs.writeFileSync(transformedFilePath, transformedCode, 'utf8');
+console.log('Wrote transformed file to:', transformedFilePath);

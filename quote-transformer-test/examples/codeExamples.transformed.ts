@@ -1,5 +1,4 @@
-
-import { ExLambda, Quoted, ExParam } from "quote-transformer/quoted";
+import { ExLambda, Quoted } from "quote-transformer/quoted";
 function test<T extends Function>(exp: Quoted<T>): void {
 }
 test(Object.assign((a: number) => a + 1, {
@@ -24,9 +23,9 @@ test(Object.assign((a: number) => [a, a], {
 }));
 test(Object.assign((a: number) => ({ a, b: a }), {
     __quoted: (): ExLambda => ((a: ExParam) => ["=>", [a], ["{}", {
-        a: a,
-        b: a
-    }]])(["p", "a"])
+                a: a,
+                b: a
+            }]])(["p", "a"])
 }));
 test(Object.assign((a: number) => a > 0 ? a : -a, {
     __quoted: (): ExLambda => ((a: ExParam) => ["=>", [a], ["?:", [">", a, ["c", 0]], a, ["-u", a]]])(["p", "a"])
@@ -58,15 +57,15 @@ interface MList<T> {
 }
 class Person {
     @field(() => Boolean)
-    isActive!: boolean;
+    isActive: boolean;
     @field(() => Date)
-    dateOfBirth!: Date;
+    dateOfBirth: Date;
     @field(() => Date)
-    dateOfDeath!: Date | null;
+    dateOfDeath: Date | null;
     @field(() => Person)
-    bestFriend!: Lite<Person> | null;
+    bestFriend: Lite<Person> | null;
     @field(() => Person)
-    otherFriends!: MList<Person>;
+    otherFriends: MList<Person>;
     @quoted((): ExLambda => ((_this: ExParam) => ["=>", [_this], ["<", ["()", [".", [".", _this, "dateOfBirth"], "getFullYear"], []], ["c", 1950]]])(["p", "_this"]))
     isOld(): boolean {
         return this.dateOfBirth.getFullYear() < 1950;
@@ -82,5 +81,8 @@ interface Person {
 Person.prototype.isMillenial = withQuoted(function (this: Person) {
     return 1981 <= this.dateOfBirth.getFullYear() && this.dateOfBirth.getFullYear() <= 1996;
 }, (): ExLambda => ((_this: ExParam) => ["=>", [_this], ["&&", ["<=", ["c", 1981], ["()", [".", [".", _this, "dateOfBirth"], "getFullYear"], []]], ["<=", ["()", [".", [".", _this, "dateOfBirth"], "getFullYear"], []], ["c", 1996]]]])(["p", "_this"]));
+var nonEmpy: Quoted<(a: string) => boolean> = Object.assign((a: string) => a.length > 0, {
+    __quoted: (): ExLambda => ((a: ExParam) => ["=>", [a], [">", [".", a, "length"], ["c", 0]]])(["p", "a"])
+});
 var p = new Person();
 console.log(p.isMillenial());

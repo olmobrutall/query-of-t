@@ -13,6 +13,7 @@ export type QuotedEx =
     ExParam |
     ExLambda |
     ExObject |
+    ExArray |
     ExNew;
 
 
@@ -25,6 +26,7 @@ export type ExCall = ["()" | "?.()", QuotedEx, QuotedEx[]];
 export type ExParam = ["p", string];
 export type ExLambda = ["=>", ExParam[], QuotedEx]
 export type ExObject = ["{}", { [name: string]: QuotedEx }];
+export type ExArray = ["[]", QuotedEx[]];
 export type ExNew = ["new", Function, QuotedEx[]];
 export type ExQuote = ["q", QuotedEx];
 
