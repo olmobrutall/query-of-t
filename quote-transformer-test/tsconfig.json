@@ -8,6 +8,8 @@
     "types": [
       "node"
     ],
+    "incremental": true,
+    "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",
     "rootDir": "./src",
     "outDir": "./dist",
     "target": "ES2022",

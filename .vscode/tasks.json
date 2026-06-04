@@ -34,38 +34,23 @@
 			"group": "build",
 		},
 		{ /*My App*/
-			"label": "npm build (my-app)",
+			"label": "install my-app",
 			"type": "npm",
-			"script": "build",
+			"options": {
+				"cwd": "${workspaceFolder}/my-app/"
+			},
+			"script": "install"
+		},
+		{
+			"label": "tsc: build - my-app",
+			"type": "typescript",
+			"tsconfig": "my-app/tsconfig.json",
 			"problemMatcher": [
 				"$tsc"
 			],
 			"group": "build",
-			"options": {
-				"cwd": "${workspaceFolder}/my-app/"
-			},
 			"dependsOn": [
 				"install my-app"
-			]
-		},
-		{
-			"label": "build-my-app-debug",
-			"type": "shell",
-			"command": "npm run --workspace=query-of-t patch-ts; npm run --workspace=query-of-t build; npm run --workspace=example build",
-			"problemMatcher": [
-				"$tsc"
-			],
-			"group": "build"
-		},
-		{
-			"label": "install my-app",
-			"type": "npm",
-			"script": "install",
-			"options": {
-				"cwd": "${workspaceFolder}/my-app/"
-			},
-			"dependsOn": [
-				"build (query-of-t)"
 			]
 		},
 		{

@@ -11,6 +11,14 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     return type.aliasSymbol?.name == "Quoted" && type.aliasTypeArguments?.length == 1;
   }
 
+  function isQuotedLikeType(type: ts.Type): boolean {
+    if (isQuoteOfT(type))
+      return true;
+
+    const quotedProperty = type.getProperty("__quoted");
+    return quotedProperty != null;
+  }
+
   function isQuoteTypedLValue(node: ts.Expression, typeChecker: ts.TypeChecker): boolean {
     const symbol = typeChecker.getSymbolAtLocation(node);
     if (symbol?.declarations != null) {
@@ -49,7 +57,18 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
 
       var paramType = signature.getTypeParameterAtPosition(index);
 
-      return isQuoteOfT(paramType);
+      if (isQuotedLikeType(paramType))
+        return true;
+
+      const signatureDeclaration = signature.getDeclaration();
+      const parameterDeclaration = signatureDeclaration?.parameters?.[index];
+      if (parameterDeclaration?.type != null) {
+        const declaredParamType = typeChecker.getTypeFromTypeNode(parameterDeclaration.type);
+        if (isQuotedLikeType(declaredParamType))
+          return true;
+      }
+
+      return false;
     }
 
     if (
@@ -65,12 +84,12 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
         ? typeChecker.getTypeFromTypeNode(node.parent.type)
         : typeChecker.getTypeAtLocation(node.parent.name);
 
-      return isQuoteOfT(declaredType);
+      return isQuotedLikeType(declaredType);
     }
 
     if (ts.isPropertyDeclaration(node.parent) && node.parent.initializer === node && node.parent.type != null) {
       const declaredType = typeChecker.getTypeFromTypeNode(node.parent.type);
-      return isQuoteOfT(declaredType);
+      return isQuotedLikeType(declaredType);
     }
 
     return false;

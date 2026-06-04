@@ -32,9 +32,7 @@ class MyQueryTranslator implements IQueryTranslator {
 
         var simplify = expressionSimplifier()(expression);
 
-
-
-        throw new Error("Not implemented");
+        throw new Error("Not implemented: " + simplify.toString());
     }
 }
 

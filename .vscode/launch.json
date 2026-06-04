@@ -20,7 +20,7 @@
             "type": "node",
             "request": "launch",
             "name": "Debug My App",
-            "preLaunchTask": "build-my-app-debug",
+            "preLaunchTask": "tsc: build - my-app",
             "program": "${workspaceFolder}/my-app/dist/queryExamples.js",
             "cwd": "${workspaceFolder}/my-app/",
             "outFiles": [
