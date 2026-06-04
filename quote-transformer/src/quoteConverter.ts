@@ -333,7 +333,13 @@ export function getQuoteConverter(tsInstance: typeof ts2) {
 
             //(a,b) => ["=>", [a, b], ["+", a, b]]
             var lambda = ts.factory.createArrowFunction(undefined, undefined,
-                params.map(n => ts.factory.createParameterDeclaration(undefined, undefined, n)),
+                params.map(n => ts.factory.createParameterDeclaration(
+                    undefined,
+                    undefined,
+                    n,
+                    undefined,
+                    ts.factory.createTypeReferenceNode("ExParam", undefined)
+                )),
                 undefined,
                 ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
                 result

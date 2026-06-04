@@ -1,7 +1,79 @@
-import { Quoted } from "quote-transformer/quoted";
+import { ExLambda, Quoted } from "quote-transformer/quoted";
 import { CallExpression, ConstantExpression, Expression, LambdaExpression, PropertyExpression } from "./expresions";
-import { ArrayType, LiteralType as SimpleType, NewType, Type, FunctionType, ObjectType } from "./types";
-import { lambdaType, resultType } from "./decorators";
+import { ArrayType, LiteralType as SimpleType, ClassType, Type, FunctionType, ObjectType } from "./types";
+
+export type LambdaTypeResolver = (thisType: Type, ...argsTypes: Type[]) => Type[];
+export type ResultTypeResolver = (thisType: Type, ...argsTypes: Type[]) => Type;
+
+export interface StaticFunction<T extends Function> {
+    __lambdaType?: LambdaTypeResolver[];
+    __resultType?: ResultTypeResolver;
+    __quoted?: () => ExLambda;
+}
+
+export function asStaticFunction<T extends Function>(func: T): StaticFunction<T> {
+    return func as any as StaticFunction<T>;
+}
+
+export function getLambdaTypeResolvers(target: object, key: string): LambdaTypeResolver[] | undefined {
+    const fn = (target as any)?.[key] as StaticFunction<Function> | undefined;
+    return fn?.__lambdaType;
+}
+
+export function getResultTypeResolver(target: object, key: string): ResultTypeResolver | undefined {
+    const fn = (target as any)?.[key] as StaticFunction<Function> | undefined;
+    return fn?.__resultType;
+}
+
+export function quoted(exp?: () => ExLambda) {
+    return function (value: any, context: ClassMethodDecoratorContext) {
+
+        if (context.kind !== "method")
+            throw new Error(`@quoted can only be applied to methods, but '${String(context.name)}' is a ${context.kind}`);
+
+        if (exp == undefined)
+            throw new Error(`Unable to add the quoted expression to "${String(context.name)}". Are you using ts-patch and quote-transformer?`);
+
+        const fn = value;
+        if (typeof fn != "function")
+            throw new Error(`@quoted can only be applied to methods, but '${String(context.name)}' is not a method`);
+
+        (fn as StaticFunction<Function>).__quoted = exp;
+        return fn;
+    };
+}
+
+export function withQuoted<T extends Function>(f: T, quoted?: () => ExLambda): T {
+    (f as StaticFunction<T>).__quoted = quoted;
+    return f;
+}
+
+export function lambdaTypeForParam(paramNumber: number, typeResolver: LambdaTypeResolver) {
+    return function (value: unknown, context: ClassMethodDecoratorContext) {
+        if (context.kind !== "method")
+            throw new Error(`@lambdaTypeForParam can only be applied to methods, but '${String(context.name)}' is a ${context.kind}`);
+
+        if (typeof value !== "function")
+            throw new Error(`@lambdaTypeForParam can only be applied to methods, but '${String(context.name)}' is not a method`);
+
+        const sf = value as StaticFunction<Function>;
+        var lambdaParams = (sf.__lambdaType ?? []) as LambdaTypeResolver[];
+        lambdaParams[paramNumber] = typeResolver;
+        sf.__lambdaType = lambdaParams;
+    };
+}
+
+export function resultType(typeResolver: ResultTypeResolver) {
+    return function (value: unknown, context: ClassMethodDecoratorContext) {
+        if (context.kind !== "method")
+            throw new Error(`@resultType can only be applied to methods, but '${String(context.name)}' is a ${context.kind}`);
+
+        if (typeof value !== "function")
+            throw new Error(`@resultType can only be applied to methods, but '${String(context.name)}' is not a method`);
+
+        (value as StaticFunction<Function>).__resultType = typeResolver;
+    };
+}
 
 
 export interface IQueryTranslator {
@@ -41,7 +113,7 @@ export class Query<T> {
         return this.translator.getQueryTextForDebug(this);
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => ot)
     filter(predicate: Quoted<(element: T) => boolean>): Query<T> {
         var lambda = Expression.fromQuotedLambda(predicate, [this.elementType]);
@@ -52,7 +124,7 @@ export class Query<T> {
         return new Query<T>(call, this.translator);
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType((ot, selType) => new ArrayType((selType as FunctionType).returnType))
     map<R>(selector: Quoted<(element: T) => R>): Query<R> {
         var lambda = Expression.fromQuotedLambda(selector, [this.elementType]);
@@ -63,7 +135,7 @@ export class Query<T> {
         return new Query<R>(call, this.translator);
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType((ot, colSelType) => (colSelType as FunctionType).returnType)
     flatMap<R>(colSelector: Quoted<(element: T) => R[] | Query<R>>): Query<R> {
         var lambda = Expression.fromQuotedLambda(colSelector, [this.elementType]);
@@ -77,7 +149,7 @@ export class Query<T> {
         return new Query<R>(call, this.translator);
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => ot)
     orderBy(selector: Quoted<(element: T) => unknown>): OrderedQuery<T> {
         var lambda = Expression.fromQuotedLambda(selector, [this.elementType]);
@@ -88,7 +160,7 @@ export class Query<T> {
         return new OrderedQuery<T>(call, this.translator);
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => ot)
     orderByDescending(selector: Quoted<(element: T) => unknown>): OrderedQuery<T> {
         var lambda = Expression.fromQuotedLambda(selector, [this.elementType]);
@@ -99,7 +171,7 @@ export class Query<T> {
         return new OrderedQuery<T>(call, this.translator);
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => SimpleType.number)
     count<R>(predicate?: Quoted<(element: T) => boolean>): number {
 
@@ -113,7 +185,7 @@ export class Query<T> {
         return this.translator.execute(call) as number;
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => SimpleType.boolean)
     some<R>(predicate?: Quoted<(element: T) => boolean>): boolean {
 
@@ -127,7 +199,7 @@ export class Query<T> {
         return this.translator.execute(call) as boolean;
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => SimpleType.boolean)
     every<R>(predicate?: Quoted<(element: T) => boolean>): boolean {
 
@@ -143,7 +215,7 @@ export class Query<T> {
 
     min(): T & (number | string | boolean | null | undefined);
     min<V extends (number | string | boolean | null | undefined)>(valueSelector: Quoted<(element: T) => V>): V;
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType((ot, selType) => selType ? (selType as FunctionType).returnType : (ot as ArrayType).elementType)
     min(valueSelector?: Quoted<(element: T) => unknown>): unknown {
         var lambda = valueSelector == null ? null : Expression.fromQuotedLambda(valueSelector, [this.elementType]);
@@ -158,7 +230,7 @@ export class Query<T> {
 
     max(): T & (number | string | boolean | null | undefined);
     max<V extends (number | string | boolean | null | undefined)>(valueSelector: Quoted<(element: T) => V>): V;
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType((ot, selType) => selType ? (selType as FunctionType).returnType : (ot as ArrayType).elementType)
     max(valueSelector?: Quoted<(element: T) => unknown>): unknown {
         var lambda = valueSelector == null ? null : Expression.fromQuotedLambda(valueSelector, [this.elementType]);
@@ -173,7 +245,7 @@ export class Query<T> {
 
     sum(): T & (number | null | undefined);
     sum<V extends (number | null | undefined)>(valueSelector: Quoted<(element: T) => V>): V;
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType((ot, at) => SimpleType.number)
     sum(valueSelector?: Quoted<(element: T) => unknown>): unknown {
         var lambda = valueSelector == null ? null : Expression.fromQuotedLambda(valueSelector, [this.elementType]);
@@ -188,7 +260,7 @@ export class Query<T> {
 
     avg(): T & (number | null | undefined);
     avg<V extends (number | null | undefined)>(valueSelector: Quoted<(element: T) => V>): V;
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType((ot, at) => SimpleType.number)
     avg(valueSelector?: Quoted<(element: T) => unknown>): unknown {
         var lambda = valueSelector == null ? null : Expression.fromQuotedLambda(valueSelector, [this.elementType]);
@@ -219,7 +291,7 @@ export class Query<T> {
         return new Query<T>(call, this.translator);
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => (ot as ArrayType).elementType)
     first<R>(predicate?: Quoted<(element: T) => boolean>): T {
 
@@ -233,7 +305,7 @@ export class Query<T> {
         return this.translator.execute(call) as T;
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => (ot as ArrayType).elementType)
     firstOrNull<R>(predicate?: Quoted<(element: T) => boolean>): T | null {
 
@@ -247,7 +319,7 @@ export class Query<T> {
         return this.translator.execute(call) as T | null;
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => (ot as ArrayType).elementType)
     last<R>(predicate?: Quoted<(element: T) => boolean>): T {
 
@@ -261,7 +333,7 @@ export class Query<T> {
         return this.translator.execute(call) as T;
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => (ot as ArrayType).elementType)
     lastOrNull<R>(predicate?: Quoted<(element: T) => boolean>): T | null {
 
@@ -275,7 +347,7 @@ export class Query<T> {
         return this.translator.execute(call) as T | null;
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => (ot as ArrayType).elementType)
     single<R>(predicate?: Quoted<(element: T) => boolean>): T {
 
@@ -289,7 +361,7 @@ export class Query<T> {
         return this.translator.execute(call) as T;
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => (ot as ArrayType).elementType)
     singleOrNull<R>(predicate?: Quoted<(element: T) => boolean>): T | null {
 
@@ -326,8 +398,8 @@ export class Query<T> {
     groupBy<K, E>(keySelector: Quoted<(element: T) => K>, elementSelector: Quoted<(element: T) => E>): Query<{ key: K, elements: E[] }>;
 
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
-    @lambdaType(1, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(1, ot => [(ot as ArrayType).elementType])
     @resultType((ot, keyType, elemType) => new ObjectType({
         key: (keyType as FunctionType).returnType,
         elements: elemType ? new ArrayType(elemType) : ot
@@ -345,9 +417,9 @@ export class Query<T> {
     }
 
 
-    @lambdaType(1, ot => [(ot as ArrayType).elementType])
-    @lambdaType(2, (ot, other) => [(other as ArrayType).elementType])
-    @lambdaType(3, (ot, other) => [(ot as ArrayType).elementType, (other as ArrayType).elementType])
+    @lambdaTypeForParam(1, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(2, (ot, other) => [(other as ArrayType).elementType])
+    @lambdaTypeForParam(3, (ot, other) => [(ot as ArrayType).elementType, (other as ArrayType).elementType])
     @resultType((ot, other, key, otherKey, result) => new ArrayType((result as FunctionType).returnType))
     join<K, O, R>(
         otherSource: Query<O>,
@@ -370,7 +442,7 @@ export class Query<T> {
 
 export class OrderedQuery<T> extends Query<T> {
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => ot)
     thenBy(selector: Quoted<(value: T) => unknown>): OrderedQuery<T> {
         var lambda = Expression.fromQuotedLambda(selector, [this.elementType]);
@@ -381,7 +453,7 @@ export class OrderedQuery<T> extends Query<T> {
         return new OrderedQuery<T>(call, this.translator);
     }
 
-    @lambdaType(0, ot => [(ot as ArrayType).elementType])
+    @lambdaTypeForParam(0, ot => [(ot as ArrayType).elementType])
     @resultType(ot => ot)
     thenByDescending(selector: Quoted<(value: T) => unknown>): OrderedQuery<T> {
         var lambda = Expression.fromQuotedLambda(selector, [this.elementType]);

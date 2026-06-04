@@ -30,7 +30,7 @@ export class LiteralType extends Type {
     }
 }
 
-export class NewType extends Type {
+export class ClassType extends Type {
     constructor(public readonly constructorFunction: Function) {
         super()
     }

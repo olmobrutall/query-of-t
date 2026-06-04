@@ -11,7 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "query-of-t": "0.0.1",
-    "ts-patch": "^3.1.2",
+    "ts-patch": "^4.0.1",
     "quote-transformer": "0.0.2"
   }
 }

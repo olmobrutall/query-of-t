@@ -15,7 +15,9 @@
   },
   "typesVersions": {
     "*": {
-      "quoted": ["./dist/quoted.d.ts"]
+      "quoted": [
+        "./dist/quoted.d.ts"
+      ]
     }
   },
   "description": "TypeScript transforms that is able to convert any arrow-function assigned to a Quote<T> into a AST that can be consumed at run-time. This enables libraries like query-of-t to translate natural query expressions into SQL. Much like LINQ to SQL / Entity Framework but for node.js",
@@ -40,7 +42,7 @@
   "author": "Olmo del Corral",
   "license": "MIT",
   "dependencies": {
-    "ts-patch": "^4.0.1",
+    "ts-patch": "4.0.1",
     "typescript": "^6.0.3"
   }
 }

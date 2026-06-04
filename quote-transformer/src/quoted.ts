@@ -1,5 +1,7 @@
 
-export type Quoted<T extends Function> = T | ExLambda;
+export type Quoted<T extends Function> = T & {
+    __quoted?: () => ExLambda;
+};
 
 export type QuotedEx =
     ExConstant |

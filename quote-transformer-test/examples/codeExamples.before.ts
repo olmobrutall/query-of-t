@@ -16,20 +16,28 @@ test((a: number) => a++);
 
 
 
-function withQuote<T extends Function>(f: T): T & { quote: ExLambda } {
-    var r = f as T & { quote: ExLambda };
-    r.quote = arguments[1] as ExLambda;
-    return r;
+function withQuoted<T extends Function>(f: T, quoted?: () => ExLambda /*Compiler Generated*/): T {
+    (f as T & { __quoted?: () => ExLambda }).__quoted = quoted;
+    return f;
 }
 
 
 
-function column(options?: { type: () => Function, nullable?: boolean, array?: boolean, lite?: boolean }) {
-    return function (target: any, key: string) {
-        if (options == undefined)
-            throw new Error(`Unable to add column`);
+function field(value: undefined, context: ClassFieldDecoratorContext): void;
+function field(type: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(...args: any[]) {
+    if (args.length >= 2 && typeof args[1] == "object")
+        throw new Error(`@field should be replaced by compiler to @field(() => Type)`);
 
-        //Reflect.defineMetadata('quoted', exp, target);
+    if (args.length != 1 || typeof args[0] != "function")
+        throw new Error(`Invalid @field usage`);
+
+    return function (..._decoratorArgs: any[]) { };
+}
+
+export function quoted(exp?: () => ExLambda) {
+    return function (value: any, context: ClassMethodDecoratorContext) {
+        return value;
     };
 }
 
@@ -44,27 +52,37 @@ interface MList<T> {
 
 class Person {
 
-    @column()
-    isActive: boolean;
+    @field
+    isActive!: boolean;
 
-    @column()
-    dateOfBirth: Date;
+    @field
+    dateOfBirth!: Date;
 
-    @column()
-    dateOfDeath: Date | null;
+    @field
+    dateOfDeath!: Date | null;
 
-    @column()
-    bestFriend: Lite<Person> | null;
+    @field
+    bestFriend!: Lite<Person> | null;
 
-    @column()
-    otherFriends: MList<Person>;
+    @field
+    otherFriends!: MList<Person>;
+
+    @quoted()
+    isOld(): boolean {
+        return this.dateOfBirth.getFullYear() < 1950;
+    }
+
+    @quoted()
+    static isMillenialYear(y: number): boolean {
+        return 1981 <= y && y <= 1996;
+    }
 }
 
 interface Person {
     isMillenial: () => boolean;
 }
 
-Person.prototype.isMillenial = withQuote(function (this: Person) {
+Person.prototype.isMillenial = withQuoted(function (this: Person) {
     return 1981 <= this.dateOfBirth.getFullYear() && this.dateOfBirth.getFullYear() <= 1996;
 });
 

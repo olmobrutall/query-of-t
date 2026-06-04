@@ -4,9 +4,15 @@
   "description": "",
   "main": "./dist/index.js",
   "types": "dist/index.d.ts",
-  "scripts": {},
+  "scripts": {
+    "build": "tspc --build",
+    "patch-ts": "ts-patch install -s"
+  },
   "keywords": [],
   "author": "Olmo del Corral",
   "license": "MIT",
-  "dependencies": {}
+  "dependencies": {
+    "quote-transformer": "0.0.2",
+    "ts-patch": "^4.0.1"
+  }
 }

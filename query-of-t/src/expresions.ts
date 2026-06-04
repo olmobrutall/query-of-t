@@ -1,8 +1,7 @@
 import { isOptionalChain } from "typescript";
 import { ExLambda, OpBinary, OpUnary, Quoted, QuotedEx, ExParam } from 'quote-transformer/quoted';
-import { ArrayType, FunctionType as FunctionType, LiteralType, NewType, ObjectType, Type } from "./types";
-import { OrderedQuery, Query } from "./query";
-import { LambdaTypeResolver, ResultTypeResolver, StaticFunction } from "./decorators";
+import { ArrayType, FunctionType as FunctionType, LiteralType, ClassType, ObjectType, Type } from "./types";
+import { getLambdaTypeResolvers, getResultTypeResolver, LambdaTypeResolver, OrderedQuery, Query, ResultTypeResolver, StaticFunction } from "./query";
 
 type Visitor = (e: Expression) => Expression;
 
@@ -17,12 +16,13 @@ export abstract class Expression {
 
 
     static fromQuotedLambda<T extends Function>(lambda: Quoted<T>, types: Type[]): LambdaExpression {
-        if (!Array.isArray(lambda))
+        const quoted = lambda.__quoted;
+        if (quoted == undefined)
             throw new Error("The following lambda has not been quoted. Are you using ts-path and quote-transformer?");
 
         var bindings = new Map<ExParam, Expression>();
 
-        return fromQuoted(lambda, types) as LambdaExpression;
+        return fromQuoted(quoted(), types) as LambdaExpression;
 
         function fromQuoted(q: QuotedEx, lambdaArgTypes?: Type[]): Expression {
 
@@ -99,17 +99,17 @@ export abstract class Expression {
                         if (fun instanceof PropertyExpression) {
                             obj = fun.object;
                             const type = obj.type instanceof ArrayType ? OrderedQuery.prototype :
-                                obj.type instanceof NewType ? obj.type.constructorFunction.prototype :
+                                obj.type instanceof ClassType ? obj.type.constructorFunction.prototype :
                                     undefined;
 
                             if (type == undefined)
                                 throw new Error(`Unexpected object type when calling ${fun.propertyName}`);
 
-                            const metadataKeys = Reflect.getMetadataKeys(type, fun.propertyName);
+                            const propertyFunction = (type as Record<string, unknown>)[fun.propertyName] as StaticFunction<Function> | undefined;
                             sf = {
-                                __lambdaType: Reflect.getMetadata("lambdaParams", type, fun.propertyName) as LambdaTypeResolver[] | undefined,
-                                __quoted: (Reflect.getMetadata("quoted", type, fun.propertyName) as (() => ExLambda) | undefined)?.(),
-                                __resultType: Reflect.getMetadata("resultType", type, fun.propertyName) as ResultTypeResolver | undefined
+                                __lambdaType: getLambdaTypeResolvers(type, fun.propertyName),
+                                __quoted: propertyFunction?.__quoted,
+                                __resultType: getResultTypeResolver(type, fun.propertyName)
                             };
                         } else if (fun instanceof ConstantExpression) {
                             sf = fun.value as StaticFunction<Function>;
@@ -125,7 +125,7 @@ export abstract class Expression {
 
                                 if (resolver == null)
                                     throw new Error(
-                                        fun instanceof PropertyExpression ? `Missing @lambdaType docorator '${fun.propertyName}' for argument '${i}'` :
+                                        fun instanceof PropertyExpression ? `Missing @lambdaTypeForParam decorator '${fun.propertyName}' for argument '${i}'` :
                                             fun instanceof ConstantExpression ? `Missing __lambdaType property for '${(fun.value as Function).name}' for argument '${i}'` :
                                                 "Unexpected");
 
@@ -140,7 +140,7 @@ export abstract class Expression {
 
                         if (sf.__quoted) {
 
-                            const lambda = sf.__quoted as ExLambda;
+                            const lambda = sf.__quoted();
 
                             if (lambda[0] != "=>")
                                 throw new Error("Unexpected non-lambda");
@@ -154,7 +154,7 @@ export abstract class Expression {
                         const getResultType = sf.__resultType;
                         if (getResultType == null)
                             throw new Error(
-                                fun instanceof PropertyExpression ? `Missing @resultType or @quoted docorator in function '${fun.propertyName}'` :
+                                fun instanceof PropertyExpression ? `Missing @resultType or @quoted in function '${fun.propertyName}'` :
                                     fun instanceof ConstantExpression ? `Missing __resultType property in function ''${(fun.value as Function).name}'` :
                                         "Unexpected"
                             );
@@ -228,7 +228,7 @@ export class ConstantExpression extends Expression {
             if (value.constructor == Object)
                 return new ObjectType({});
 
-            return new NewType((value as {}).constructor);
+            return new ClassType((value as {}).constructor);
         }
         if (typeof value === "function") {
             return new FunctionType(value, LiteralType.null/* unknown */);
@@ -559,7 +559,7 @@ export class NewExpression extends Expression {
         public readonly constructorFunction: Function,
         public readonly args: ReadonlyArray<Expression>
     ) {
-        super("new", new NewType(constructorFunction));
+        super("new", new ClassType(constructorFunction));
     }
 
     toString(): string {
