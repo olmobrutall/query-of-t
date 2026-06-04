@@ -81,6 +81,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
   const typeChecker = program.getTypeChecker();
 
   const printer = ts.createPrinter();
+  let generatedExParam = false;
 
   function addQuoteError(sourceFile: ts.SourceFile, quote: QuoteError): void {
     addDiagnostic({
@@ -102,6 +103,82 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
       length: node.getFullWidth(),
       messageText,
     });
+  }
+
+  function ensureQuotedImportHasExParam(sourceFile: ts.SourceFile): ts.SourceFile {
+    const quotedModule = "quote-transformer/quoted";
+
+    function noImportPhaseModifier(): ts.ImportPhaseModifierSyntaxKind | undefined {
+      return undefined;
+    }
+
+    function hasExParamNamedImport(named: ts.NamedImports): boolean {
+      return named.elements.some(e => {
+        const imported = e.propertyName?.text ?? e.name.text;
+        return imported == "ExParam";
+      });
+    }
+
+    function createExParamImportSpecifier(): ts.ImportSpecifier {
+      return ts.factory.createImportSpecifier(false, undefined, ts.factory.createIdentifier("ExParam"));
+    }
+
+    for (let i = 0; i < sourceFile.statements.length; i++) {
+      const statement = sourceFile.statements[i];
+      if (!ts.isImportDeclaration(statement))
+        continue;
+
+      if (!ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text != quotedModule)
+        continue;
+
+      const importClause = statement.importClause;
+      if (importClause?.namedBindings && ts.isNamedImports(importClause.namedBindings)) {
+        if (hasExParamNamedImport(importClause.namedBindings))
+          return sourceFile;
+
+        const updatedNamedImports = ts.factory.updateNamedImports(importClause.namedBindings, [
+          ...importClause.namedBindings.elements,
+          createExParamImportSpecifier(),
+        ]);
+
+        const updatedClause = ts.factory.updateImportClause(
+          importClause,
+          importClause.phaseModifier,
+          importClause.name,
+          updatedNamedImports,
+        );
+
+        const updatedImport = ts.factory.updateImportDeclaration(
+          statement,
+          statement.modifiers,
+          updatedClause,
+          statement.moduleSpecifier,
+          statement.attributes,
+        );
+
+        const updatedStatements = [...sourceFile.statements];
+        updatedStatements[i] = updatedImport;
+        return ts.factory.updateSourceFile(sourceFile, updatedStatements);
+      }
+
+      const exParamImport = ts.factory.createImportDeclaration(
+        undefined,
+        ts.factory.createImportClause(noImportPhaseModifier(), undefined, ts.factory.createNamedImports([createExParamImportSpecifier()])),
+        ts.factory.createStringLiteral(quotedModule),
+      );
+
+      const updatedStatements = [...sourceFile.statements];
+      updatedStatements.splice(i + 1, 0, exParamImport);
+      return ts.factory.updateSourceFile(sourceFile, updatedStatements);
+    }
+
+    const exParamImport = ts.factory.createImportDeclaration(
+      undefined,
+      ts.factory.createImportClause(noImportPhaseModifier(), undefined, ts.factory.createNamedImports([createExParamImportSpecifier()])),
+      ts.factory.createStringLiteral(quotedModule),
+    );
+
+    return ts.factory.updateSourceFile(sourceFile, [exParamImport, ...sourceFile.statements]);
   }
 
   function isWithQuotedCall(node: ts.CallExpression): boolean {
@@ -133,6 +210,18 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     return found;
   }
 
+  function createQuotedArg(quote: ts.Expression): ts.ArrowFunction {
+    generatedExParam = true;
+    return ts.factory.createArrowFunction(
+      undefined,
+      undefined,
+      [],
+      ts.factory.createTypeReferenceNode("ExLambda", undefined),
+      ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+      quote,
+    );
+  }
+
   function transformWithQuotedCall(node: ts.CallExpression, sourceFile: ts.SourceFile): ts.CallExpression {
     if (!isWithQuotedCall(node) || node.arguments.length != 1)
       return node;
@@ -146,14 +235,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
         return node;
       }
 
-      const quotedArg = ts.factory.createArrowFunction(
-        undefined,
-        undefined,
-        [],
-        ts.factory.createTypeReferenceNode("ExLambda", undefined),
-        ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-        quote,
-      );
+      const quotedArg = createQuotedArg(quote);
 
       return ts.factory.updateCallExpression(
         node,
@@ -208,14 +290,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
       return node;
     }
 
-    const quotedArg = ts.factory.createArrowFunction(
-      undefined,
-      undefined,
-      [],
-      ts.factory.createTypeReferenceNode("ExLambda", undefined),
-      ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-      quote,
-    );
+    const quotedArg = createQuotedArg(quote);
 
     return ts.factory.updateCallExpression(
       node,
@@ -263,14 +338,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
       return node;
     }
 
-    const quotedArg = ts.factory.createArrowFunction(
-      undefined,
-      undefined,
-      [],
-      ts.factory.createTypeReferenceNode("ExLambda", undefined),
-      ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-      quote,
-    );
+    const quotedArg = createQuotedArg(quote);
 
     const modifiers = node.modifiers.map(m => {
       if (!ts.isDecorator(m))
@@ -303,43 +371,76 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
   return function myTransformer(ctx: ts.TransformationContext): ts.Transformer<ts.SourceFile> {
 
     return (sourceFile: ts.SourceFile) => {
+      generatedExParam = false;
+      let quotedContextDepth = 0;
+
+      function visitWithQuotedContext<TNode extends ts.Node>(node: TNode): TNode {
+        quotedContextDepth++;
+        try {
+          return ts.visitEachChild(node, visit, ctx) as TNode;
+        } finally {
+          quotedContextDepth--;
+        }
+      }
 
       function visit(node: ts.Node): ts.Node {
 
         if (ts.isCallExpression(node)) {
-          const visited = ts.visitEachChild(node, visit, ctx) as ts.CallExpression;
+          let visited: ts.CallExpression;
+
+          if (isWithQuotedCall(node) && node.arguments.length > 0) {
+            const expression = ts.visitNode(node.expression, visit) as ts.LeftHandSideExpression;
+            const updatedArguments = node.arguments.map((arg, index) =>
+              index == 0
+                ? visitWithQuotedContext(arg)
+                : ts.visitNode(arg, visit) as ts.Expression
+            );
+
+            visited = ts.factory.updateCallExpression(
+              node,
+              expression,
+              node.typeArguments,
+              updatedArguments,
+            );
+          } else {
+            visited = ts.visitEachChild(node, visit, ctx) as ts.CallExpression;
+          }
+
           return transformWithQuotedCall(visited, sourceFile);
         }
 
         if (ts.isMethodDeclaration(node)) {
-          const visited = ts.visitEachChild(node, visit, ctx) as ts.MethodDeclaration;
+          const visited = node.modifiers?.some(isQuotedDecoratorNoArgs)
+            ? visitWithQuotedContext(node)
+            : ts.visitEachChild(node, visit, ctx) as ts.MethodDeclaration;
+
           return transformQuotedMethod(visited, sourceFile);
         }
 
-        if (ts.isArrowFunction(node) && assignedToQuoteOfT(node, typeChecker)) {
+        if (ts.isArrowFunction(node)) {
+          const assignedToQuoted = assignedToQuoteOfT(node, typeChecker);
+          const visited = assignedToQuoted
+            ? visitWithQuotedContext(node)
+            : ts.visitEachChild(node, visit, ctx) as ts.ArrowFunction;
 
-          var quote = quoteExpression(node, []);
+          if (!(assignedToQuoted && quotedContextDepth == 0))
+            return visited;
+
+          var quote = quoteExpression(visited, []);
 
           if (quote instanceof QuoteError) {
             addQuoteError(sourceFile, quote);
 
-            return node;
+            return visited;
           }
           else {
-            const quotedArg = ts.factory.createArrowFunction(
-              undefined,
-              undefined,
-              [],
-              ts.factory.createTypeReferenceNode("ExLambda", undefined),
-              ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-              quote,
-            );
+            const quotedArg = createQuotedArg(quote);
 
             return ts.factory.createCallExpression(
               ts.factory.createPropertyAccessExpression(ts.factory.createIdentifier("Object"), "assign"),
               undefined,
               [
-                node,
+                visited,
                 ts.factory.createObjectLiteralExpression([
                   ts.factory.createPropertyAssignment("__quoted", quotedArg),
                 ], true),
@@ -410,7 +511,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
               return m;
             });
 
-            const result = ts.factory.updatePropertyDeclaration(node, modifiers, node.name, node.questionToken, node.type, node.initializer);
+            const result = ts.factory.updatePropertyDeclaration(node, modifiers, node.name, node.questionToken ?? node.exclamationToken, node.type, node.initializer);
             return result;
           }
         }
@@ -418,7 +519,11 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
         return ts.visitEachChild(node, visit, ctx);
       }
 
-      return ts.visitNode(sourceFile, visit) as ts.SourceFile;
+      const transformed = ts.visitNode(sourceFile, visit) as ts.SourceFile;
+      if (!generatedExParam)
+        return transformed;
+
+      return ensureQuotedImportHasExParam(transformed);
 
     };
   };

@@ -1,7 +1,7 @@
 import { ExLambda, Quoted } from "quote-transformer/quoted";
 
-function test<T extends Function>(exp: Quoted<T>): void {
-
+function test<T extends Function>(exp: Quoted<T>): T {
+    return exp();
 }
 
 test((a: number) => a + 1);
@@ -14,6 +14,15 @@ test((a: number) => ({ a, b: a }));
 test((a: number) => a > 0 ? a : -a);
 test((a: number) => a++);
 
+//Nested test
+test((a: number) => test((b: number) => a + b));
+
+function asQuoted<T extends Function>(exp: Quoted<T>): Quoted<T> {
+    return exp;
+}
+
+// Repro: nested Quoted call inside another Quoted lambda should not inject Object.assign into outer quote body.
+test((a: number) => asQuoted((b: number) => b == a));
 
 
 function withQuoted<T extends Function>(f: T, quoted?: () => ExLambda /*Compiler Generated*/): T {
@@ -73,6 +82,11 @@ class Person {
     }
 
     @quoted()
+    hasSameBirthYearAs(ol: { year: number }): boolean {
+        return asQuoted((x: { year: number }) => x.year == this.dateOfBirth.getFullYear())(ol);
+    }
+
+    @quoted()
     static isMillenialYear(y: number): boolean {
         return 1981 <= y && y <= 1996;
     }
@@ -87,6 +101,8 @@ Person.prototype.isMillenial = withQuoted(function (this: Person) {
 });
 
 var nonEmpty: Quoted<(a: string) => boolean> = (a: string) => a.length > 0;
+
+nonEmpty = (a: string) => a.length > 0 && a != "";
 
 var p = new Person();
 console.log(p.isMillenial());

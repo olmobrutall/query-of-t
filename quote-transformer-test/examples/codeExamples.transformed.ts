@@ -1,5 +1,6 @@
-import { ExLambda, Quoted } from "quote-transformer/quoted";
-function test<T extends Function>(exp: Quoted<T>): void {
+import { ExLambda, Quoted, ExParam } from "quote-transformer/quoted";
+function test<T extends Function>(exp: Quoted<T>): T {
+    return exp();
 }
 test(Object.assign((a: number) => a + 1, {
     __quoted: (): ExLambda => ((a: ExParam) => ["=>", [a], ["+", a, ["c", 1]]])(["p", "a"])
@@ -31,6 +32,17 @@ test(Object.assign((a: number) => a > 0 ? a : -a, {
     __quoted: (): ExLambda => ((a: ExParam) => ["=>", [a], ["?:", [">", a, ["c", 0]], a, ["-u", a]]])(["p", "a"])
 }));
 test((a: number) => a++);
+//Nested test
+test(Object.assign((a: number) => test((b: number) => a + b), {
+    __quoted: (): ExLambda => ((a: ExParam) => ["=>", [a], ["()", ["c", test], [((b: ExParam) => ["=>", [b], ["+", a, b]])(["p", "b"])]]])(["p", "a"])
+}));
+function asQuoted<T extends Function>(exp: Quoted<T>): Quoted<T> {
+    return exp;
+}
+// Repro: nested Quoted call inside another Quoted lambda should not inject Object.assign into outer quote body.
+test(Object.assign((a: number) => asQuoted((b: number) => b == a), {
+    __quoted: (): ExLambda => ((a: ExParam) => ["=>", [a], ["()", ["c", asQuoted], [((b: ExParam) => ["=>", [b], ["==", b, a]])(["p", "b"])]]])(["p", "a"])
+}));
 function withQuoted<T extends Function>(f: T, quoted?: () => ExLambda /*Compiler Generated*/): T {
     (f as T & {
         __quoted?: () => ExLambda;
@@ -57,18 +69,26 @@ interface MList<T> {
 }
 class Person {
     @field(() => Boolean)
-    isActive: boolean;
+    isActive!: boolean;
     @field(() => Date)
-    dateOfBirth: Date;
+    dateOfBirth!: Date;
     @field(() => Date)
-    dateOfDeath: Date | null;
+    dateOfDeath!: Date | null;
     @field(() => Person)
-    bestFriend: Lite<Person> | null;
+    bestFriend!: Lite<Person> | null;
     @field(() => Person)
-    otherFriends: MList<Person>;
+    otherFriends!: MList<Person>;
     @quoted((): ExLambda => ((_this: ExParam) => ["=>", [_this], ["<", ["()", [".", [".", _this, "dateOfBirth"], "getFullYear"], []], ["c", 1950]]])(["p", "_this"]))
     isOld(): boolean {
         return this.dateOfBirth.getFullYear() < 1950;
+    }
+    @quoted((): ExLambda => ((_this: ExParam, ol: ExParam) => ["=>", [_this, ol], ["()", ["()", ["c", asQuoted], [((x: ExParam) => ["=>", [x], ["==", [".", x, "year"], ["()", [".", [".", _this, "dateOfBirth"], "getFullYear"], []]]])(["p", "x"])]], [ol]]])(["p", "_this"], ["p", "ol"]))
+    hasSameBirthYearAs(ol: {
+        year: number;
+    }): boolean {
+        return asQuoted((x: {
+            year: number;
+        }) => x.year == this.dateOfBirth.getFullYear())(ol);
     }
     @quoted((): ExLambda => ((y: ExParam) => ["=>", [y], ["&&", ["<=", ["c", 1981], y], ["<=", y, ["c", 1996]]]])(["p", "y"]))
     static isMillenialYear(y: number): boolean {
@@ -81,8 +101,11 @@ interface Person {
 Person.prototype.isMillenial = withQuoted(function (this: Person) {
     return 1981 <= this.dateOfBirth.getFullYear() && this.dateOfBirth.getFullYear() <= 1996;
 }, (): ExLambda => ((_this: ExParam) => ["=>", [_this], ["&&", ["<=", ["c", 1981], ["()", [".", [".", _this, "dateOfBirth"], "getFullYear"], []]], ["<=", ["()", [".", [".", _this, "dateOfBirth"], "getFullYear"], []], ["c", 1996]]]])(["p", "_this"]));
-var nonEmpy: Quoted<(a: string) => boolean> = Object.assign((a: string) => a.length > 0, {
+var nonEmpty: Quoted<(a: string) => boolean> = Object.assign((a: string) => a.length > 0, {
     __quoted: (): ExLambda => ((a: ExParam) => ["=>", [a], [">", [".", a, "length"], ["c", 0]]])(["p", "a"])
+});
+nonEmpty = Object.assign((a: string) => a.length > 0 && a != "", {
+    __quoted: (): ExLambda => ((a: ExParam) => ["=>", [a], ["&&", [">", [".", a, "length"], ["c", 0]], ["!=", a, ["c", ""]]]])(["p", "a"])
 });
 var p = new Person();
 console.log(p.isMillenial());
