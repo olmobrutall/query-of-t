@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"D:\\\\Signum\\\\Southwind\\\\Southwind\" -name \"*Mixin*.cs\" -o -name \"*Territory*.cs\" -o -name \"*Region*.cs\" | head -20)"
+    ]
+  }
+}

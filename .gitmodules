@@ -1,0 +1,3 @@
+[submodule "southwind"]
+	path = southwind
+	url = https://github.com/signumsoftware/southwind
