@@ -5,11 +5,19 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc",
-    "start": "node lib/initTransformer.js"
+    "test": "tsc && jest",
+    "start": "node dist/initTransformer.js"
+  },
+  "jest": {
+    "testMatch": ["**/dist/**/*.test.js"]
   },
   "dependencies": {
     "@types/node": "25.9.1",
     "quote-transformer": "../quote-transformer",
     "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.4.2"
   }
 }

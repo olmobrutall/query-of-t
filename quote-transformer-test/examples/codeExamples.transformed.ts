@@ -50,11 +50,11 @@ function withQuoted<T extends Function>(f: T, quoted?: () => ExLambda /*Compiler
     return f;
 }
 function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
 function field(...args: any[]) {
     if (args.length >= 2 && typeof args[1] == "object")
         throw new Error(`@field should be replaced by compiler to @field(() => Type)`);
-    if (args.length != 1 || typeof args[0] != "function")
+    if (args.length == 0 || typeof args[0] != "function")
         throw new Error(`Invalid @field usage`);
     return function (..._decoratorArgs: any[]) { };
 }
@@ -63,9 +63,7 @@ export function quoted(exp?: () => ExLambda) {
         return value;
     };
 }
-interface Lite<T> {
-}
-interface MList<T> {
+class Lite<T> {
 }
 class Person {
     @field(() => Boolean)
@@ -74,10 +72,10 @@ class Person {
     dateOfBirth!: Date;
     @field(() => Date)
     dateOfDeath!: Date | null;
-    @field(() => Person)
+    @field(() => Lite, () => Person)
     bestFriend!: Lite<Person> | null;
-    @field(() => Person)
-    otherFriends!: MList<Person>;
+    @field(() => Array, () => Person)
+    otherFriends!: Person[];
     @quoted((): ExLambda => ((_this: ExParam) => ["=>", [_this], ["<", ["()", [".", [".", _this, "dateOfBirth"], "getFullYear"], []], ["c", 1950]]])(["p", "_this"]))
     isOld(): boolean {
         return this.dateOfBirth.getFullYear() < 1950;
@@ -109,3 +107,10 @@ nonEmpty = Object.assign((a: string) => a.length > 0 && a != "", {
 });
 var p = new Person();
 console.log(p.isMillenial());
+// --- msg() localization ---
+function msg(desc?: string, member?: string, module?: string): any { return null; }
+const ValidationMessage = {
+    _0IsNotSet: msg(undefined, "_0IsNotSet", "ValidationMessage"),
+    BeNotNull: msg(undefined, "BeNotNull", "ValidationMessage"),
+    _0HasMoreThan1DecimalPlaces: msg("{0} has more than {1} decimal places", "_0HasMoreThan1DecimalPlaces", "ValidationMessage"),
+};

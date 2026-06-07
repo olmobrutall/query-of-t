@@ -19,6 +19,22 @@
         {
             "type": "node",
             "request": "launch",
+            "name": "Debug Jest - quote-transformer-test",
+            "preLaunchTask": "tsc: build - quote-transformer-test",
+            "program": "${workspaceFolder}/quote-transformer-test/node_modules/jest/bin/jest.js",
+            "args": [
+                "--runInBand"
+            ],
+            "cwd": "${workspaceFolder}/quote-transformer-test/",
+            "outFiles": [
+                "${workspaceFolder}/quote-transformer-test/dist/**/*.js"
+            ],
+            "sourceMaps": true,
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "node",
+            "request": "launch",
             "name": "Debug My App",
             "preLaunchTask": "tsc: build - my-app",
             "program": "${workspaceFolder}/my-app/dist/queryExamples.js",

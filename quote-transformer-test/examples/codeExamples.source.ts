@@ -33,12 +33,12 @@ function withQuoted<T extends Function>(f: T, quoted?: () => ExLambda /*Compiler
 
 
 function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
 function field(...args: any[]) {
     if (args.length >= 2 && typeof args[1] == "object")
         throw new Error(`@field should be replaced by compiler to @field(() => Type)`);
 
-    if (args.length != 1 || typeof args[0] != "function")
+    if (args.length == 0 || typeof args[0] != "function")
         throw new Error(`Invalid @field usage`);
 
     return function (..._decoratorArgs: any[]) { };
@@ -50,11 +50,7 @@ export function quoted(exp?: () => ExLambda) {
     };
 }
 
-interface Lite<T> {
-
-}
-
-interface MList<T> {
+class Lite<T> {
 
 }
 
@@ -74,7 +70,7 @@ class Person {
     bestFriend!: Lite<Person> | null;
 
     @field
-    otherFriends!: MList<Person>;
+    otherFriends!: Person[];
 
     @quoted()
     isOld(): boolean {
@@ -106,3 +102,13 @@ nonEmpty = (a: string) => a.length > 0 && a != "";
 
 var p = new Person();
 console.log(p.isMillenial());
+
+// --- msg() localization ---
+
+function msg(desc?: string, member?: string, module?: string): any { return null; }
+
+const ValidationMessage = {
+    _0IsNotSet: msg(),
+    BeNotNull: msg(),
+    _0HasMoreThan1DecimalPlaces: msg("{0} has more than {1} decimal places"),
+};

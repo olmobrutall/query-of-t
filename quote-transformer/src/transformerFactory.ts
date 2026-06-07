@@ -200,6 +200,28 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     return ts.factory.updateSourceFile(sourceFile, [exParamImport, ...sourceFile.statements]);
   }
 
+  function isMsgCall(node: ts.CallExpression): boolean {
+    if (!ts.isIdentifier(node.expression) || node.expression.text !== 'msg')
+      return false;
+    if (node.arguments.length === 0)
+      return true;
+    if (node.arguments.length === 1 && ts.isStringLiteral(node.arguments[0]))
+      return true;
+    return false;
+  }
+
+  function transformMsgCall(call: ts.CallExpression, memberName: string, moduleName: string): ts.CallExpression {
+    const firstArg = call.arguments.length === 0
+      ? ts.factory.createIdentifier('undefined')
+      : call.arguments[0];
+    return ts.factory.updateCallExpression(
+      call,
+      call.expression,
+      call.typeArguments,
+      [firstArg, ts.factory.createStringLiteral(memberName), ts.factory.createStringLiteral(moduleName)],
+    );
+  }
+
   function isWithQuotedCall(node: ts.CallExpression): boolean {
     return ts.isIdentifier(node.expression) && node.expression.text == "withQuoted";
   }
@@ -208,6 +230,20 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     return ts.isDecorator(modifier) && (
       (ts.isCallExpression(modifier.expression) && ts.isIdentifier(modifier.expression.expression) && modifier.expression.expression.text == "quoted" && modifier.expression.arguments.length == 0) ||
       (ts.isIdentifier(modifier.expression) && modifier.expression.text == "quoted")
+    );
+  }
+
+  function isFieldDecorator(modifier: ts.ModifierLike): boolean {
+    return ts.isDecorator(modifier) && (
+      (ts.isIdentifier(modifier.expression) && modifier.expression.text == "field") ||
+      (ts.isCallExpression(modifier.expression) && ts.isIdentifier(modifier.expression.expression) && modifier.expression.expression.text == "field")
+    );
+  }
+
+  function isIgnoreDecorator(modifier: ts.ModifierLike): boolean {
+    return ts.isDecorator(modifier) && (
+      (ts.isIdentifier(modifier.expression) && modifier.expression.text == "ignore") ||
+      (ts.isCallExpression(modifier.expression) && ts.isIdentifier(modifier.expression.expression) && modifier.expression.expression.text == "ignore")
     );
   }
 
@@ -387,11 +423,130 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     );
   }
 
+  // Walks the type-checker heritage chain to check if ModifiableEntity appears anywhere.
+  function extendsModifiableEntity(node: ts.ClassDeclaration): boolean {
+    try {
+      const type = typeChecker.getTypeAtLocation(node) as ts.InterfaceType;
+
+      function hasModifiableBase(t: ts.InterfaceType): boolean {
+        const bases = typeChecker.getBaseTypes(t);
+        for (const base of bases) {
+          if (base.symbol?.name === 'ModifiableEntity')
+            return true;
+          if (hasModifiableBase(base as ts.InterfaceType))
+            return true;
+        }
+        return false;
+      }
+
+      return hasModifiableBase(type);
+    } catch {
+      return false;
+    }
+  }
+
+  // Computes the @field factory args from a type annotation node.
+  // Returns [outerFactory] or [outerFactory, innerFactory] based on whether the type is generic.
+  function buildFieldFactories(typeNode: ts.TypeNode): ts.ArrowFunction[] | null {
+    let type = typeNode;
+
+    const nullable = extractNull(type);
+    if (nullable)
+      type = nullable.cleanType;
+
+    // T[] — array shorthand
+    if (ts.isArrayTypeNode(type)) {
+      const innerRef = runtimeType(type.elementType);
+      if (innerRef == null) return null;
+      const outerRef = ts.factory.createIdentifier("Array");
+      return [makeFactory(outerRef), makeFactory(innerRef)];
+    }
+
+    // Generic with exactly one type arg: Lite<T>, Array<T>, LiteWithPhoto<T>, etc.
+    if (ts.isTypeReferenceNode(type) && type.typeArguments?.length == 1) {
+      const outerRef = toRuntimeReference(type.typeName);
+      if (outerRef == null) return null;
+      const innerTypeNode = type.typeArguments[0];
+
+      // Strip nullable from the inner type too
+      const innerNullable = extractNull(innerTypeNode);
+      const innerClean = innerNullable ? innerNullable.cleanType : innerTypeNode;
+      const innerRef = runtimeType(innerClean);
+      if (innerRef == null) return null;
+      return [makeFactory(outerRef), makeFactory(innerRef)];
+    }
+
+    // Simple type (string, number, boolean, Date, or class ref with no/multiple type args)
+    const typeRef = runtimeType(type);
+    if (typeRef == null) return null;
+    return [makeFactory(typeRef)];
+  }
+
+  function makeFactory(ref: ts.Identifier | ts.PropertyAccessExpression): ts.ArrowFunction {
+    return ts.factory.createArrowFunction(
+      undefined,
+      undefined,
+      [],
+      undefined,
+      ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+      ref as ts.Expression,
+    );
+  }
+
+  // Injects @field decorators for properties in a ModifiableEntity subclass that are missing them.
+  function injectMissingFieldDecorators(node: ts.ClassDeclaration, sourceFile: ts.SourceFile): ts.ClassDeclaration {
+    const newMembers = node.members.map((member): ts.ClassElement => {
+      if (!ts.isPropertyDeclaration(member))
+        return member;
+
+      const isStatic = member.modifiers?.some(m => m.kind === ts.SyntaxKind.StaticKeyword) ?? false;
+      if (isStatic) return member;
+
+      const hasField = member.modifiers?.some(m => isFieldDecorator(m)) ?? false;
+      const hasIgnore = member.modifiers?.some(m => isIgnoreDecorator(m)) ?? false;
+      if (hasField || hasIgnore || !member.type) return member;
+
+      const factories = buildFieldFactories(member.type);
+      if (factories == null) {
+        addNodeError(sourceFile, member.type, "Unable to make run-time reference for auto-injected @field");
+        return member;
+      }
+
+      const fieldCall = ts.factory.createCallExpression(
+        ts.factory.createIdentifier("field"),
+        undefined,
+        factories,
+      );
+      const fieldDecorator = ts.factory.createDecorator(fieldCall);
+
+      const newModifiers: ts.ModifierLike[] = [fieldDecorator, ...(member.modifiers ?? [])];
+      return ts.factory.updatePropertyDeclaration(
+        member,
+        newModifiers,
+        member.name,
+        member.questionToken ?? member.exclamationToken,
+        member.type,
+        member.initializer,
+      );
+    });
+
+    return ts.factory.updateClassDeclaration(
+      node,
+      node.modifiers,
+      node.name,
+      node.typeParameters,
+      node.heritageClauses,
+      newMembers,
+    );
+  }
+
   return function myTransformer(ctx: ts.TransformationContext): ts.Transformer<ts.SourceFile> {
 
     return (sourceFile: ts.SourceFile) => {
       generatedExParam = false;
       let quotedContextDepth = 0;
+      let msgModuleName: string | null = null;
+      let msgMemberName: string | null = null;
 
       function visitWithQuotedContext<TNode extends ts.Node>(node: TNode): TNode {
         quotedContextDepth++;
@@ -403,6 +558,34 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
       }
 
       function visit(node: ts.Node): ts.Node {
+
+        // Track module name for msg() rewriting: module-level const X = { ... }
+        if (ts.isVariableDeclaration(node) &&
+          ts.isIdentifier(node.name) &&
+          node.initializer && ts.isObjectLiteralExpression(node.initializer) &&
+          ts.isVariableDeclarationList(node.parent) &&
+          (node.parent.flags & ts.NodeFlags.Const) !== 0 &&
+          ts.isVariableStatement(node.parent.parent) &&
+          ts.isSourceFile(node.parent.parent.parent)
+        ) {
+          const prev = msgModuleName;
+          msgModuleName = node.name.text;
+          const result = ts.visitEachChild(node, visit, ctx);
+          msgModuleName = prev;
+          return result;
+        }
+
+        // Track member name for msg() rewriting: property keys inside the object
+        if (ts.isPropertyAssignment(node) && msgModuleName != null) {
+          const key = ts.isIdentifier(node.name) || ts.isStringLiteral(node.name) ? node.name.text : null;
+          if (key != null) {
+            const prev = msgMemberName;
+            msgMemberName = key;
+            const result = ts.visitEachChild(node, visit, ctx);
+            msgMemberName = prev;
+            return result;
+          }
+        }
 
         if (ts.isCallExpression(node)) {
           let visited: ts.CallExpression;
@@ -425,7 +608,12 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
             visited = ts.visitEachChild(node, visit, ctx) as ts.CallExpression;
           }
 
-          return transformWithQuotedCall(visited, sourceFile);
+          const afterQuote = transformWithQuotedCall(visited, sourceFile);
+
+          if (ts.isCallExpression(afterQuote) && isMsgCall(afterQuote) && msgModuleName != null && msgMemberName != null)
+            return transformMsgCall(afterQuote, msgMemberName, msgModuleName);
+
+          return afterQuote;
         }
 
         if (ts.isMethodDeclaration(node)) {
@@ -468,65 +656,46 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
           }
         }
 
+        if (ts.isClassDeclaration(node)) {
+          // Check BEFORE visiting children (type checker works on original AST)
+          const isModifiable = extendsModifiableEntity(node);
+          const visited = ts.visitEachChild(node, visit, ctx) as ts.ClassDeclaration;
+
+          if (!isModifiable)
+            return visited;
+
+          return injectMissingFieldDecorators(visited, sourceFile);
+        }
+
         if (ts.isPropertyDeclaration(node)) {
 
           if (node.type && node.modifiers) {
-            const hasFieldDecorator = node.modifiers.some(m =>
-              ts.isDecorator(m) && (
-                (ts.isIdentifier(m.expression) && m.expression.text == "field") ||
-                (ts.isCallExpression(m.expression) && ts.isIdentifier(m.expression.expression) && m.expression.expression.text == "field")
-              ));
+            const hasFieldDec = node.modifiers.some(m => isFieldDecorator(m));
 
-            if (!hasFieldDecorator)
+            if (!hasFieldDec)
               return ts.visitEachChild(node, visit, ctx);
 
-            let type = node.type;
-            let isMList = false;
-            let isNullable = false;
-            let isLite = false;
-
-            const mlist = extractMList(type);
-            if (mlist) {
-              type = mlist.elementType;
-              isMList = true;
-            }
-            const nullable = extractNull(type);
-            if (nullable) {
-              type = nullable.cleanType;
-              isNullable = true;
-            }
-            const lite = extractLite(type);
-            if (lite) {
-              type = lite.entityType;
-              isLite = true;
-            }
-
-            const typeRef = runtimeType(type);
-            if (typeRef == null) {
-              addNodeError(sourceFile, type, "Unable to take make run-time reference for @field");
+            const factories = buildFieldFactories(node.type);
+            if (factories == null) {
+              addNodeError(sourceFile, node.type, "Unable to take make run-time reference for @field");
               return node;
             }
-
-            const typeFactory = ts.factory.createArrowFunction(undefined, undefined, [], undefined,
-              ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
-              typeRef as ts.Expression
-            );
 
             const modifiers = node.modifiers.map(m => {
               if (!ts.isDecorator(m))
                 return m;
 
               if (ts.isIdentifier(m.expression) && m.expression.text == "field") {
-                return ts.factory.createDecorator(ts.factory.createCallExpression(m.expression, undefined, [typeFactory]));
+                return ts.factory.createDecorator(ts.factory.createCallExpression(m.expression, undefined, factories));
               }
 
               if (!ts.isCallExpression(m.expression) || !ts.isIdentifier(m.expression.expression) || m.expression.expression.text != "field")
                 return m;
 
               if (m.expression.arguments.length == 0)
-                return ts.factory.createDecorator(ts.factory.createCallExpression(m.expression.expression, undefined, [typeFactory]));
+                return ts.factory.createDecorator(ts.factory.createCallExpression(m.expression.expression, undefined, factories));
 
-              // @field(type) already provided explicitly.
+              // @field(type) already provided explicitly — leave as-is
               return m;
             });
 
@@ -559,20 +728,6 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
       }
     }
 
-    return null;
-  }
-
-  function extractMList(node: ts.TypeNode): { elementType: ts.TypeNode } | null {
-    if (ts.isTypeReferenceNode(node) && cleanTypeName(node.typeName) == "MList" && node.typeArguments?.length == 1) {
-      return { elementType: node.typeArguments[0] };
-    }
-    return null;
-  }
-
-  function extractLite(node: ts.TypeNode): { entityType: ts.TypeNode } | null {
-    if (ts.isTypeReferenceNode(node) && cleanTypeName(node.typeName) == "Lite" && node.typeArguments?.length == 1) {
-      return { entityType: node.typeArguments[0] };
-    }
     return null;
   }
 
@@ -612,4 +767,3 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     return null;
   }
 }
-

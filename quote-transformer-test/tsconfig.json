@@ -6,7 +6,8 @@
   ],
   "compilerOptions": {
     "types": [
-      "node"
+      "node",
+      "jest"
     ],
     "incremental": true,
     "tsBuildInfoFile": "./dist/tsconfig.tsbuildinfo",

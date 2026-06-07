@@ -2,6 +2,7 @@
 
 TypeScript LINQ provider / ORM inspired by Signum Framework.
 Reference implementation: `southwind/` submodule (do not modify).
+Reference implementation: `southwind/Framework` submodule (do not modify).
 
 ---
 
