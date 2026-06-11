@@ -7,7 +7,7 @@ export class LocalizableMessage {
         readonly defaultDescription: string | undefined,
         readonly member: string | undefined,
         readonly module: string | undefined,
-    ) {}
+    ) { }
 
     niceToString(...args: unknown[]): string {
         const template = DescriptionManager.lookup(this) ?? this._getDefault();

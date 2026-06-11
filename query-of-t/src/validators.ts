@@ -34,6 +34,12 @@ function addValidator(context: ClassFieldDecoratorContext, validator: Validator)
     getOrCreateFieldInfo(typeInfo, key).validators.push(validator);
 }
 
+enum Color {
+    Red,
+}
+
+
+
 // --- fieldValidation ---
 
 export function customValidators<T>(fn: (entity: T, fi: FieldInfo) => string | null) {

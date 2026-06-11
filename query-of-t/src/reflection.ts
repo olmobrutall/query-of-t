@@ -8,6 +8,7 @@ export type ImplementationsInfo =
 
 
 export class FieldInfo {
+    readonly name: string;
     type: () => Function = () => Object;
     innerType?: () => Function;
     isNullable?: boolean;
@@ -18,7 +19,9 @@ export class FieldInfo {
     validators: Validator[] = [];
     customValidation?: (entity: any, fieldInfo: FieldInfo) => string | null;
 
-    constructor(readonly name: string) { }
+    constructor(name: string) {
+        this.name = name;
+    }
 
     niceToString(): string {
         return DescriptionManager.inferDescription(this.name);
@@ -101,3 +104,4 @@ export function field(arg1: unknown, arg2?: unknown): unknown {
             fi.innerType = innerTypeFactory;
     };
 }
+

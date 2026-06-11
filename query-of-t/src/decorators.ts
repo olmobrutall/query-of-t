@@ -76,3 +76,5 @@ export function implementedByAll(_value: undefined, context: ClassFieldDecorator
     getOrCreateFieldInfo(typeInfo, key).implementations = { kind: 'implementedByAll' };
 }
 
+
+
