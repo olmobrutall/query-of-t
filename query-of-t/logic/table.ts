@@ -1,7 +1,8 @@
-import { Entity } from "./entities/entity";
-import { CallExpression, ConstantExpression, Expression } from "./expresions";
-import { asStaticFunction, IQueryTranslator, Query } from "./query";
-import { ArrayType, FunctionType, ClassType, Type } from "./types";
+
+import { Entity } from "../entities/entity";
+import { CallExpression, ConstantExpression, Expression } from "../entities/expresions";
+import { asStaticFunction, IQueryTranslator, Query } from "../entities/query";
+import { ArrayType, FunctionType, ClassType, Type } from "../entities/types";
 import { expressionSimplifier } from "./visitors/expressionSimplifier";
 
 
@@ -60,4 +61,3 @@ export abstract class Connector {
     static global: Connector = null!;
     abstract executeQuery(sql: string, parameters: unknown[]): Promise<unknown[]>;
 }
-

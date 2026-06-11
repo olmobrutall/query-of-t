@@ -1,4 +1,8 @@
-import { FieldInfo, getOrCreateTypeInfo } from "./reflection";
+
+import { FieldInfo, getOrCreateTypeInfo } from "../entities/reflection";
+import type { ColumnOptions } from "../entities/reflection";
+
+export { ColumnOptions };
 
 export class ObjectName {
     constructor(
@@ -42,17 +46,6 @@ export class Table {
     }
 
     columns: { [columnName: string]: Column };
-}
-
-export interface ColumnOptions {
-    columnName?: string;
-    pgDbType?: string;
-    sqlDbType?: string;
-    nullable?: boolean;
-    collection?: boolean;
-    ignored?: boolean;
-    size?: number;
-    precision?: number;
 }
 
 export function column(options: ColumnOptions = {}) {

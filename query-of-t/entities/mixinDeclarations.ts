@@ -1,5 +1,6 @@
+
 import type { ModifiableEntity } from './modifiable';
-import { getOrCreateTypeInfo } from '../reflection';
+import { getOrCreateTypeInfo } from './reflection';
 
 const mixinDeclarationsKey = Symbol.for('query-of-t:mixinDeclarations');
 

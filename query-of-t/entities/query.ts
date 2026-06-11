@@ -1,3 +1,4 @@
+
 import { ExLambda, Quoted } from "quote-transformer/quoted";
 import { CallExpression, ConstantExpression, Expression, LambdaExpression, PropertyExpression } from "./expresions";
 import { ArrayType, LiteralType as SimpleType, ClassType, Type, FunctionType, ObjectType } from "./types";

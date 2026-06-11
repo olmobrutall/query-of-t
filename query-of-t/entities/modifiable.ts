@@ -1,3 +1,4 @@
+
 export type InitValues<T> = Partial<{
     [K in keyof T as T[K] extends Function ? never : K]: T[K]
 }>;

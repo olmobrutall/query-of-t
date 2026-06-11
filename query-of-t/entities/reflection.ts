@@ -1,6 +1,18 @@
-import type { ColumnOptions } from './schema';
-import type { Validator } from './validators';
+
 import { DescriptionManager } from './utils/localization';
+
+// ColumnOptions lives here (shared) so logic/schema.ts can import it without
+// the entities package depending on server-only code.
+export interface ColumnOptions {
+    columnName?: string;
+    pgDbType?: string;
+    sqlDbType?: string;
+    nullable?: boolean;
+    collection?: boolean;
+    ignored?: boolean;
+    size?: number;
+    precision?: number;
+}
 
 export type ImplementationsInfo =
     | { kind: 'implementedBy'; types: (new () => unknown)[] }
@@ -25,6 +37,25 @@ export class FieldInfo {
 
     niceToString(): string {
         return DescriptionManager.inferDescription(this.name);
+    }
+}
+
+// Validator is declared here (forward-reference) to break the circular dep
+// between reflection ↔ validators.  The full implementations live in validators.ts.
+export abstract class Validator {
+    isApplicable?: (entity: any) => boolean;
+    customError?: () => string;
+
+    abstract get helpMessage(): string;
+    isCompatibleWith?(type: Function): boolean;
+
+    protected abstract overrideError(value: unknown, entity: any, fieldName: FieldInfo): string | null;
+
+    error(value: unknown, entity: any, fieldName: FieldInfo): string | null {
+        if (this.isApplicable != null && !this.isApplicable(entity)) return null;
+        const result = this.overrideError(value, entity, fieldName);
+        if (result == null) return null;
+        return this.customError != null ? this.customError() : result;
     }
 }
 
@@ -104,4 +135,3 @@ export function field(arg1: unknown, arg2?: unknown): unknown {
             fi.innerType = innerTypeFactory;
     };
 }
-

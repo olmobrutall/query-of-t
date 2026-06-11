@@ -1,3 +1,4 @@
+
 import { isOptionalChain } from "typescript";
 import { ExLambda, OpBinary, OpUnary, Quoted, QuotedEx, ExParam } from 'quote-transformer/quoted';
 import { ArrayType, FunctionType as FunctionType, LiteralType, ClassType, ObjectType, Type } from "./types";
@@ -351,9 +352,6 @@ export class ConditionalExpression extends Expression {
     }
 
     private static calculateType(trueExpression: Expression, falseExpression: Expression): Type {
-        // Choose the type based on the types of trueExpression and falseExpression.
-        // For simplicity, this example assumes both expressions have the same type.
-        // You might want to enhance this logic based on your specific use case.
         return trueExpression.type || falseExpression.type;
     }
 

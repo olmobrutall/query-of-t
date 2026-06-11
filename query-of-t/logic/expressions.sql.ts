@@ -1,5 +1,6 @@
-import { Expression } from "./expresions";
-import { LiteralType, Type } from "./types";
+
+import { Expression } from "../entities/expresions";
+import { LiteralType, Type } from "../entities/types";
 
 
 class Alias {
@@ -26,4 +27,3 @@ abstract class SourceWithAliasExpression extends SourceExpression {
         super(kind)
     }
 }
-

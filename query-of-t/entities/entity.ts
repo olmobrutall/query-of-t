@@ -1,4 +1,5 @@
-import { field } from '../reflection';
+
+import { field } from './reflection';
 import { ModifiableEntity } from './modifiable';
 import type { Lite } from './lite';
 import type { PrimaryKey } from './primaryKey';

@@ -1,7 +1,10 @@
-import { getOrCreateTypeInfo, getOrCreateFieldInfo } from './reflection';
+
+import { getOrCreateTypeInfo, getOrCreateFieldInfo, Validator } from './reflection';
 import type { FieldInfo } from './reflection';
-import type { ModifiableEntity } from './entities/modifiable';
+import type { ModifiableEntity } from './modifiable';
 import { msg } from './utils/localization';
+
+export { Validator } from './reflection';
 
 export const ValidationMessage = {
     _0MustHaveAtMost1Characters: msg(),
@@ -10,35 +13,11 @@ export const ValidationMessage = {
     _0HasSomeRepeatedElements1: msg("{0} has some repeated elements: {1}"),
 };
 
-export abstract class Validator {
-    isApplicable?: (entity: ModifiableEntity) => boolean;
-    customError?: () => string;
-
-    abstract get helpMessage(): string;
-
-    isCompatibleWith?(type: Function): boolean;
-
-    protected abstract overrideError(value: unknown, entity: ModifiableEntity, fieldName: FieldInfo): string | null;
-
-    error(value: unknown, entity: ModifiableEntity, fieldName: FieldInfo): string | null {
-        if (this.isApplicable != null && !this.isApplicable(entity)) return null;
-        const result = this.overrideError(value, entity, fieldName);
-        if (result == null) return null;
-        return this.customError != null ? this.customError() : result;
-    }
-}
-
 function addValidator(context: ClassFieldDecoratorContext, validator: Validator): void {
     const key = String(context.name);
     const typeInfo = getOrCreateTypeInfo(context.metadata!);
     getOrCreateFieldInfo(typeInfo, key).validators.push(validator);
 }
-
-enum Color {
-    Red,
-}
-
-
 
 // --- fieldValidation ---
 

@@ -1,4 +1,5 @@
-import { field } from "../reflection";
+
+import { field } from "./reflection";
 import { Entity } from "./entity";
 
 export class UserEntity extends Entity {

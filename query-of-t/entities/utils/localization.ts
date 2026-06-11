@@ -1,4 +1,5 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
+
+import type { IContextVariable, IContextStorage } from '../context';
 
 export class LocalizableMessage {
     private _inferred?: string;
@@ -34,32 +35,41 @@ function format(template: string, ...args: unknown[]): string {
 }
 
 export namespace DescriptionManager {
-    // Process-wide defaults — changed by setDefaultCulture / setDefaultUICulture
+    // Process-wide defaults
     let _defaultCulture = 'en';
     let _defaultUICulture = 'en';
 
-    // Per-async-context overrides — set via withCulture / withUICulture
-    const _cultureStorage = new AsyncLocalStorage<string>();
-    const _uiCultureStorage = new AsyncLocalStorage<string>();
+    // Per-async-context overrides — backed by IContextVariable so the
+    // implementation works on both Node (AsyncLocalStorage) and browser (global var).
+    // Call initLocalizationContext(Statics) once at application startup.
+    let _cultureVar: IContextVariable<string> | undefined;
+    let _uiCultureVar: IContextVariable<string> | undefined;
 
-    // Mirrors CultureInfo.CurrentCulture — used for number/date formatting
-    export function currentCulture(): string { return _cultureStorage.getStore() ?? _defaultCulture; }
-    // Mirrors CultureInfo.CurrentUICulture — used for translation lookup
-    export function currentUICulture(): string { return _uiCultureStorage.getStore() ?? _defaultUICulture; }
+    export function initLocalizationContext(storage: IContextStorage): void {
+        _cultureVar = storage.newContextVariable<string>();
+        _uiCultureVar = storage.newContextVariable<string>();
+    }
+
+    export function currentCulture(): string { return _cultureVar?.getValue() ?? _defaultCulture; }
+    export function currentUICulture(): string { return _uiCultureVar?.getValue() ?? _defaultUICulture; }
 
     export function setDefaultCulture(locale: string): void { _defaultCulture = locale; }
     export function setDefaultUICulture(locale: string): void { _defaultUICulture = locale; }
 
-    // Run fn in a scoped culture — safe across concurrent async requests
     export function withCulture<T>(locale: string, fn: () => T): T {
-        return _cultureStorage.run(locale, fn);
+        if (_cultureVar == null)
+            throw new Error('Call DescriptionManager.initLocalizationContext(Statics) before using withCulture');
+        return _cultureVar.withValue(locale, fn);
     }
+
     export function withUICulture<T>(locale: string, fn: () => T): T {
-        return _uiCultureStorage.run(locale, fn);
+        if (_uiCultureVar == null)
+            throw new Error('Call DescriptionManager.initLocalizationContext(Statics) before using withUICulture');
+        return _uiCultureVar.withValue(locale, fn);
     }
-    // Convenience: set both at once (common case)
+
     export function withCultures<T>(locale: string, fn: () => T): T {
-        return _cultureStorage.run(locale, () => _uiCultureStorage.run(locale, fn));
+        return withCulture(locale, () => withUICulture(locale, fn));
     }
 
     const _translations = new Map<string, Record<string, string>>();

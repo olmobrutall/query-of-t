@@ -1,3 +1,4 @@
+
 import { getOrCreateTypeInfo, getOrCreateFieldInfo } from './reflection';
 
 export {
@@ -75,6 +76,3 @@ export function implementedByAll(_value: undefined, context: ClassFieldDecorator
     const typeInfo = getOrCreateTypeInfo(context.metadata!);
     getOrCreateFieldInfo(typeInfo, key).implementations = { kind: 'implementedByAll' };
 }
-
-
-

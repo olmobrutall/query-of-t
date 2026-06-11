@@ -1,6 +1,7 @@
+
 import { OpBinary, OpUnary } from "quote-transformer/quoted";
-import { BinaryExpression, CallExpression, ConditionalExpression, ConstantExpression, Expression, LambdaExpression, NewExpression, ObjectExpression, ParameterExpression, PropertyExpression, UnaryExpression } from "../expresions";
-import { LiteralType, Type } from "../types";
+import { BinaryExpression, CallExpression, ConditionalExpression, ConstantExpression, Expression, LambdaExpression, NewExpression, ObjectExpression, ParameterExpression, PropertyExpression, UnaryExpression } from "../../entities/expresions";
+import { LiteralType, Type } from "../../entities/types";
 
 
 export function expressionSimplifier() {
@@ -191,7 +192,6 @@ function evalBinary(a: unknown, b: unknown, op: OpBinary) {
         case "===": return (a as number) === (b as number);
         case ">": return (a as number) > (b as number);
         case ">=": return (a as number) >= (b as number);
-        case ">>": return (a as number) >> (b as number);
         case ">>": return (a as number) >> (b as number);
         case ">>>": return (a as number) >> (b as number);
         case "??": return a ?? b;
