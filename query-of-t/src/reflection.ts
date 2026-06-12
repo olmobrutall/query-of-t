@@ -10,6 +10,7 @@ export type ImplementationsInfo =
 export class FieldInfo {
     type: () => Function = () => Object;
     innerType?: () => Function;
+    kind?: string;
     isNullable?: boolean;
     fkPropertyName?: string;
     implementations?: ImplementationsInfo;
@@ -77,8 +78,8 @@ function isFieldContext(value: unknown): value is ClassFieldDecoratorContext | C
 }
 
 export function field(value: undefined, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext): void;
-export function field(type: () => Function, innerType?: () => Function): (value: unknown, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext) => void;
-export function field(arg1: unknown, arg2?: unknown): unknown {
+export function field(type: () => Function, innerType?: (() => Function) | undefined, kind?: string): (value: unknown, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext) => void;
+export function field(arg1: unknown, arg2?: unknown, arg3?: unknown): unknown {
     if (isFieldContext(arg2)) {
         throw new Error('@field without type should be rewritten by the compiler to @field(() => Type)');
     }
@@ -88,6 +89,7 @@ export function field(arg1: unknown, arg2?: unknown): unknown {
 
     const typeFactory = arg1 as () => Function;
     const innerTypeFactory = typeof arg2 === 'function' ? arg2 as () => Function : undefined;
+    const kind = typeof arg3 === 'string' ? arg3 : undefined;
 
     return function (_value: unknown, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext) {
         if (context.metadata == null)
@@ -99,5 +101,7 @@ export function field(arg1: unknown, arg2?: unknown): unknown {
         fi.type = typeFactory;
         if (innerTypeFactory != null)
             fi.innerType = innerTypeFactory;
+        if (kind != null)
+            fi.kind = kind;
     };
 }

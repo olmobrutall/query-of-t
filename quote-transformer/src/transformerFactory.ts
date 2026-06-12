@@ -446,8 +446,8 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
   }
 
   // Computes the @field factory args from a type annotation node.
-  // Returns [outerFactory] or [outerFactory, innerFactory] based on whether the type is generic.
-  function buildFieldFactories(typeNode: ts.TypeNode): ts.ArrowFunction[] | null {
+  // Returns [outerFactory] or [outerFactory, innerFactory] or [outerFactory, undefined, "kind"] based on type.
+  function buildFieldFactories(typeNode: ts.TypeNode): ts.Expression[] | null {
     let type = typeNode;
 
     const nullable = extractNull(type);
@@ -476,10 +476,38 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
       return [makeFactory(outerRef), makeFactory(innerRef)];
     }
 
+    // Type alias for a primitive (e.g. type int = number): emit @field(() => Number, undefined, "int")
+    if (ts.isTypeReferenceNode(type) && !type.typeArguments?.length && ts.isIdentifier(type.typeName)) {
+      const alias = resolvePrimitiveAlias(type);
+      if (alias != null) {
+        return [
+          makeFactory(ts.factory.createIdentifier(alias.constructorName)),
+          ts.factory.createIdentifier("undefined"),
+          ts.factory.createStringLiteral(alias.aliasName),
+        ];
+      }
+    }
+
     // Simple type (string, number, boolean, Date, or class ref with no/multiple type args)
     const typeRef = runtimeType(type);
     if (typeRef == null) return null;
     return [makeFactory(typeRef)];
+  }
+
+  function resolvePrimitiveAlias(node: ts.TypeReferenceNode): { constructorName: string; aliasName: string } | null {
+    const tsType = typeChecker.getTypeFromTypeNode(node);
+    const aliasName = (node.typeName as ts.Identifier).text;
+
+    if (tsType.flags & ts.TypeFlags.Number)
+      return { constructorName: "Number", aliasName };
+    if (tsType.flags & ts.TypeFlags.String)
+      return { constructorName: "String", aliasName };
+    if (tsType.flags & ts.TypeFlags.Boolean)
+      return { constructorName: "Boolean", aliasName };
+    if (tsType.flags & ts.TypeFlags.BigInt)
+      return { constructorName: "BigInt", aliasName };
+
+    return null;
   }
 
   function makeFactory(ref: ts.Identifier | ts.PropertyAccessExpression): ts.ArrowFunction {

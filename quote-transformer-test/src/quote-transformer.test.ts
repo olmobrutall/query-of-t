@@ -266,6 +266,27 @@ class EmployeeEntity extends ModifiableEntity {
         );
     });
 
+    test('field decorator resolves primitive type aliases to kind string', () => {
+        assertSimpleTransform(
+            `type int = number;
+function field(value: undefined, context: ClassFieldDecoratorContext): void;
+function field(type: () => Function, innerType?: () => Function, kind?: string): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(..._args: any[]) { return function () { }; }
+class Order {
+    @field quantity!: int;
+    @field price!: number;
+}`,
+            `type int = number;
+function field(value: undefined, context: ClassFieldDecoratorContext): void;
+function field(type: () => Function, innerType?: () => Function, kind?: string): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(..._args: any[]) { return function () { }; }
+class Order {
+    @field(() => Number, undefined, "int") quantity!: int;
+    @field(() => Number) price!: number;
+}`
+        );
+    });
+
     test('quoted method decorator generates ExLambda arg', () => {
         assertSimpleTransform(
             `export function quoted(exp?: () => ExLambda) {
