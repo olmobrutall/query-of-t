@@ -1,4 +1,4 @@
-# query-of-t Implementation Plan
+# Query-of-T Implementation Plan
 
 TypeScript LINQ provider / ORM inspired by Signum Framework.
 Reference implementation: `southwind/` submodule (do not modify).
