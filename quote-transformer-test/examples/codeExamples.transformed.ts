@@ -72,9 +72,9 @@ class Person {
     dateOfBirth!: Date;
     @field(() => Date)
     dateOfDeath!: Date | null;
-    @field(() => Lite, () => Person)
+    @field(() => Person, { container: () => Lite })
     bestFriend!: Lite<Person> | null;
-    @field(() => Array, () => Person)
+    @field(() => Person, { container: () => Array })
     otherFriends!: Person[];
     @quoted((): ExLambda => ((_this: ExParam) => ["=>", [_this], ["<", ["()", [".", [".", _this, "dateOfBirth"], "getFullYear"], []], ["c", 1950]]])(["p", "_this"]))
     isOld(): boolean {

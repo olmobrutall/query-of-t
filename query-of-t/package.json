@@ -12,7 +12,9 @@
   "author": "Olmo del Corral",
   "license": "MIT",
   "dependencies": {
+    "decimal.js": "^10.6.0",
     "quote-transformer": "0.0.2",
+    "temporal-polyfill": "^0.3.2",
     "ts-patch": "^4.0.1"
   }
 }

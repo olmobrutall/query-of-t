@@ -192,7 +192,7 @@ nonEmpty = Object.assign((a: string) => a.length > 0 && a != "", {
     test('field decorator infers runtime type', () => {
         assertSimpleTransform(
             `function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
 function field(..._args: any[]) { return function () { }; }
 class Lite<T> { }
 class Person {
@@ -203,15 +203,15 @@ class Person {
     @field otherFriends!: Person[];
 }`,
             `function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
 function field(..._args: any[]) { return function () { }; }
 class Lite<T> { }
 class Person {
     @field(() => Boolean) isActive!: boolean;
     @field(() => Date) dateOfBirth!: Date;
     @field(() => Date) dateOfDeath!: Date | null;
-    @field(() => Lite, () => Person) bestFriend!: Lite<Person> | null;
-    @field(() => Array, () => Person) otherFriends!: Person[];
+    @field(() => Person, { container: () => Lite }) bestFriend!: Lite<Person> | null;
+    @field(() => Person, { container: () => Array }) otherFriends!: Person[];
 }`
         );
     });
@@ -245,7 +245,7 @@ class PersonEntity extends ModifiableEntity {
 
     test('auto-injects @field with two args for generic types in ModifiableEntity subclasses', () => {
         assertSimpleTransform(
-            `function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
+            `function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
 function field(..._args: any[]) { return function () { }; }
 class Lite<T> { }
 abstract class ModifiableEntity { }
@@ -254,23 +254,23 @@ class EmployeeEntity extends ModifiableEntity {
     manager!: Lite<EmployeeEntity> | null;
     reports!: EmployeeEntity[];
 }`,
-            `function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
+            `function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
 function field(..._args: any[]) { return function () { }; }
 class Lite<T> { }
 abstract class ModifiableEntity { }
 class EmployeeEntity extends ModifiableEntity {
     @field(() => String) name!: string;
-    @field(() => Lite, () => EmployeeEntity) manager!: Lite<EmployeeEntity> | null;
-    @field(() => Array, () => EmployeeEntity) reports!: EmployeeEntity[];
+    @field(() => EmployeeEntity, { container: () => Lite }) manager!: Lite<EmployeeEntity> | null;
+    @field(() => EmployeeEntity, { container: () => Array }) reports!: EmployeeEntity[];
 }`
         );
     });
 
-    test('field decorator resolves primitive type aliases to kind string', () => {
+    test('field decorator resolves primitive type aliases to options bag', () => {
         assertSimpleTransform(
             `type int = number;
 function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => Function, innerType?: () => Function, kind?: string): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
 function field(..._args: any[]) { return function () { }; }
 class Order {
     @field quantity!: int;
@@ -278,11 +278,53 @@ class Order {
 }`,
             `type int = number;
 function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => Function, innerType?: () => Function, kind?: string): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
 function field(..._args: any[]) { return function () { }; }
 class Order {
-    @field(() => Number, undefined, "int") quantity!: int;
+    @field(() => Number, { name: "int" }) quantity!: int;
     @field(() => Number) price!: number;
+}`
+        );
+    });
+
+    test('field decorator handles nullable element in container', () => {
+        assertSimpleTransform(
+            `type int = number;
+function field(value: undefined, context: ClassFieldDecoratorContext): void;
+function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(..._args: any[]) { return function () { }; }
+class Order {
+    @field nums!: (int | null)[];
+    @field tags!: string[];
+}`,
+            `type int = number;
+function field(value: undefined, context: ClassFieldDecoratorContext): void;
+function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(..._args: any[]) { return function () { }; }
+class Order {
+    @field(() => Number, { name: "int", nullable: true, container: () => Array }) nums!: (int | null)[];
+    @field(() => String, { container: () => Array }) tags!: string[];
+}`
+        );
+    });
+
+    test('field decorator handles enum types', () => {
+        assertSimpleTransform(
+            `enum Color { Red, Green, Blue }
+function field(value: undefined, context: ClassFieldDecoratorContext): void;
+function field(type: () => unknown, options?: { name?: string; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(..._args: any[]) { return function () { }; }
+class Item {
+    @field color!: Color;
+    @field name!: string;
+}`,
+            `enum Color { Red, Green, Blue }
+function field(value: undefined, context: ClassFieldDecoratorContext): void;
+function field(type: () => unknown, options?: { name?: string; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
+function field(..._args: any[]) { return function () { }; }
+class Item {
+    @field(() => Color, { name: "Color" }) color!: Color;
+    @field(() => String) name!: string;
 }`
         );
     });

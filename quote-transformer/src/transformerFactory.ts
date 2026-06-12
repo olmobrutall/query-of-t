@@ -446,68 +446,110 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
   }
 
   // Computes the @field factory args from a type annotation node.
-  // Returns [outerFactory] or [outerFactory, innerFactory] or [outerFactory, undefined, "kind"] based on type.
+  // First arg is always the element/inner type; second arg is an options object when needed.
+  // e.g. @field(() => Person, { container: () => Array }) for Person[]
+  //      @field(() => Number, { name: "int", nullable: true, container: () => Array }) for (int | null)[]
   function buildFieldFactories(typeNode: ts.TypeNode): ts.Expression[] | null {
-    let type = typeNode;
+    const resolved = resolveElementType(typeNode, false);
+    if (resolved == null) return null;
 
-    const nullable = extractNull(type);
-    if (nullable)
-      type = nullable.cleanType;
+    const { typeFactory, name, nullable, containerRef } = resolved;
+    const hasOpts = name != null || nullable === true || containerRef != null;
+
+    if (!hasOpts)
+      return [typeFactory];
+
+    const props: ts.ObjectLiteralElementLike[] = [];
+    if (name != null)
+      props.push(ts.factory.createPropertyAssignment("name", ts.factory.createStringLiteral(name)));
+    if (nullable === true)
+      props.push(ts.factory.createPropertyAssignment("nullable", ts.factory.createTrue()));
+    if (containerRef != null)
+      props.push(ts.factory.createPropertyAssignment("container", makeFactory(containerRef)));
+
+    return [typeFactory, ts.factory.createObjectLiteralExpression(props)];
+  }
+
+  interface ElementTypeResult {
+    typeFactory: ts.ArrowFunction;
+    name?: string;
+    nullable?: true;
+    containerRef?: ts.Identifier | ts.PropertyAccessExpression;
+  }
+
+  // Resolves the element/inner type and any container/nullable metadata.
+  // insideContainer=true: a | null on this node sets nullable on the result.
+  function resolveElementType(typeNode: ts.TypeNode, insideContainer: boolean): ElementTypeResult | null {
+    // (T | null)[] has elementType = ParenthesizedTypeNode — unwrap before processing
+    let type: ts.TypeNode = typeNode;
+    while (ts.isParenthesizedTypeNode(type)) type = type.type;
+
+    let elementNullable: true | undefined;
+
+    const stripped = extractNull(type);
+    if (stripped) {
+      type = stripped.cleanType;
+      if (insideContainer) elementNullable = true;
+    }
 
     // T[] — array shorthand
     if (ts.isArrayTypeNode(type)) {
-      const innerRef = runtimeType(type.elementType);
-      if (innerRef == null) return null;
-      const outerRef = ts.factory.createIdentifier("Array");
-      return [makeFactory(outerRef), makeFactory(innerRef)];
+      const inner = resolveElementType(type.elementType, true);
+      if (inner == null) return null;
+      return { ...inner, containerRef: ts.factory.createIdentifier("Array") };
     }
 
-    // Generic with exactly one type arg: Lite<T>, Array<T>, LiteWithPhoto<T>, etc.
+    // Generic<T> with exactly one type arg
     if (ts.isTypeReferenceNode(type) && type.typeArguments?.length == 1) {
       const outerRef = toRuntimeReference(type.typeName);
       if (outerRef == null) return null;
-      const innerTypeNode = type.typeArguments[0];
-
-      // Strip nullable from the inner type too
-      const innerNullable = extractNull(innerTypeNode);
-      const innerClean = innerNullable ? innerNullable.cleanType : innerTypeNode;
-      const innerRef = runtimeType(innerClean);
-      if (innerRef == null) return null;
-      return [makeFactory(outerRef), makeFactory(innerRef)];
+      const inner = resolveElementType(type.typeArguments[0], true);
+      if (inner == null) return null;
+      return { ...inner, containerRef: outerRef };
     }
 
-    // Type alias for a primitive (e.g. type int = number): emit @field(() => Number, undefined, "int")
     if (ts.isTypeReferenceNode(type) && !type.typeArguments?.length && ts.isIdentifier(type.typeName)) {
+      // Primitive alias: type int = number  →  @field(() => Number, { name: "int" })
       const alias = resolvePrimitiveAlias(type);
       if (alias != null) {
-        return [
-          makeFactory(ts.factory.createIdentifier(alias.constructorName)),
-          ts.factory.createIdentifier("undefined"),
-          ts.factory.createStringLiteral(alias.aliasName),
-        ];
+        return {
+          typeFactory: makeFactory(ts.factory.createIdentifier(alias.constructorName)),
+          name: alias.aliasName,
+          nullable: elementNullable,
+        };
+      }
+
+      // Regular enum: Color  →  @field(() => Color, { name: "Color" })
+      if (isEnumType(type)) {
+        return {
+          typeFactory: makeFactory(toRuntimeReference(type.typeName)!),
+          name: type.typeName.text,
+          nullable: elementNullable,
+        };
       }
     }
 
-    // Simple type (string, number, boolean, Date, or class ref with no/multiple type args)
+    // Fallback: keyword (number, string, boolean) or plain class reference
     const typeRef = runtimeType(type);
     if (typeRef == null) return null;
-    return [makeFactory(typeRef)];
+    return { typeFactory: makeFactory(typeRef), nullable: elementNullable };
   }
 
   function resolvePrimitiveAlias(node: ts.TypeReferenceNode): { constructorName: string; aliasName: string } | null {
     const tsType = typeChecker.getTypeFromTypeNode(node);
     const aliasName = (node.typeName as ts.Identifier).text;
 
-    if (tsType.flags & ts.TypeFlags.Number)
-      return { constructorName: "Number", aliasName };
-    if (tsType.flags & ts.TypeFlags.String)
-      return { constructorName: "String", aliasName };
-    if (tsType.flags & ts.TypeFlags.Boolean)
-      return { constructorName: "Boolean", aliasName };
-    if (tsType.flags & ts.TypeFlags.BigInt)
-      return { constructorName: "BigInt", aliasName };
+    if (tsType.flags & ts.TypeFlags.Number) return { constructorName: "Number", aliasName };
+    if (tsType.flags & ts.TypeFlags.String) return { constructorName: "String", aliasName };
+    if (tsType.flags & ts.TypeFlags.Boolean) return { constructorName: "Boolean", aliasName };
+    if (tsType.flags & ts.TypeFlags.BigInt) return { constructorName: "BigInt", aliasName };
 
     return null;
+  }
+
+  function isEnumType(node: ts.TypeReferenceNode): boolean {
+    const symbol = typeChecker.getSymbolAtLocation(node.typeName);
+    return symbol != null && (symbol.flags & ts.SymbolFlags.RegularEnum) !== 0;
   }
 
   function makeFactory(ref: ts.Identifier | ts.PropertyAccessExpression): ts.ArrowFunction {
