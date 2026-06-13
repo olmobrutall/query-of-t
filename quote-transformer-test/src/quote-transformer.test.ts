@@ -16,6 +16,24 @@ function withQuoted<T extends Function>(f: T, quoted?: () => ExLambda): T {
 }
 `;
 
+// Virtual query-of-t module: provides field and entity type declarations for test programs.
+const VIRTUAL_QOT_PATH = path.join(process.cwd(), '__virtual_query_of_t__.ts');
+const VIRTUAL_QOT_SOURCE = `
+export interface FieldOptions {
+    name?: string;
+    nullable?: boolean;
+    container?: () => unknown;
+}
+export declare function field(value: undefined, context: ClassFieldDecoratorContext): void;
+export declare function field(type: () => unknown, options?: FieldOptions): (value: undefined, context: ClassFieldDecoratorContext) => void;
+export declare function entity(...args: any[]): any;
+`;
+
+// Standard header for assertFieldTransform: imports field and entity from query-of-t.
+const FIELD_HEADER = `import { entity, field } from "query-of-t";
+class Lite<T> {}
+`;
+
 function transformSource(source: string): string {
     const fileName = path.join(process.cwd(), '__test__.ts');
     const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.ESNext, true);
@@ -50,6 +68,61 @@ function transformSource(source: string): string {
     return ts.createPrinter().printFile(result.transformed[0]);
 }
 
+// Like transformSource but resolves "query-of-t" to a virtual module providing field/entity declarations.
+function transformSourceWithField(source: string): string {
+    const fileName = path.join(process.cwd(), '__test__.ts');
+    const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.ESNext, true);
+    const qotFile = ts.createSourceFile(VIRTUAL_QOT_PATH, VIRTUAL_QOT_SOURCE, ts.ScriptTarget.ESNext, true);
+
+    const defaultHost = ts.createCompilerHost({});
+    const customHost: ts.CompilerHost = {
+        ...defaultHost,
+        getSourceFile: (name, languageVersion) => {
+            const norm = path.normalize(name);
+            if (norm === path.normalize(fileName)) return sourceFile;
+            if (norm === path.normalize(VIRTUAL_QOT_PATH)) return qotFile;
+            return defaultHost.getSourceFile(name, languageVersion);
+        },
+        fileExists: (name) => {
+            const norm = path.normalize(name);
+            return norm === path.normalize(fileName)
+                || norm === path.normalize(VIRTUAL_QOT_PATH)
+                || defaultHost.fileExists(name);
+        },
+        readFile: (name) => {
+            const norm = path.normalize(name);
+            if (norm === path.normalize(fileName)) return source;
+            if (norm === path.normalize(VIRTUAL_QOT_PATH)) return VIRTUAL_QOT_SOURCE;
+            return defaultHost.readFile(name);
+        },
+        // eslint-disable-next-line deprecation/deprecation
+        resolveModuleNames(moduleNames, containingFile, _reused, _redirected, compilerOptions) {
+            return moduleNames.map(name => {
+                if (name === 'query-of-t')
+                    return { resolvedFileName: VIRTUAL_QOT_PATH, isExternalLibraryImport: false };
+                return ts.resolveModuleName(name, containingFile, compilerOptions, defaultHost).resolvedModule;
+            });
+        },
+    };
+
+    const program = ts.createProgram([fileName], {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.CommonJS,
+        moduleResolution: ts.ModuleResolutionKind.Node10,
+        experimentalDecorators: true,
+        skipLibCheck: true,
+        strict: false,
+    }, customHost);
+
+    const transformer = transformerFactory(program, undefined, {
+        ts,
+        addDiagnostic: () => 0,
+    } as any);
+
+    const result = ts.transform(sourceFile, [transformer]);
+    return ts.createPrinter().printFile(result.transformed[0]);
+}
+
 function normalize(s: string): string {
     return s.replace(/\s+/g, ' ').trim();
 }
@@ -59,6 +132,13 @@ function getPrintedHeader(): string {
     if (cachedPrintedHeader === null)
         cachedPrintedHeader = transformSource(HEADER);
     return cachedPrintedHeader;
+}
+
+let cachedPrintedFieldHeader: string | null = null;
+function getPrintedFieldHeader(): string {
+    if (cachedPrintedFieldHeader === null)
+        cachedPrintedFieldHeader = transformSourceWithField(FIELD_HEADER);
+    return cachedPrintedFieldHeader;
 }
 
 function assertSimpleTransform(input: string, expected: string): void {
@@ -72,6 +152,22 @@ function assertSimpleTransform(input: string, expected: string): void {
 
 function assertFullTransform(input: string, expected: string): void {
     expect(normalize(transformSource(input))).toBe(normalize(expected));
+}
+
+// Asserts a transformation where field and entity are imported from "query-of-t".
+// The test body comes after the standard FIELD_HEADER (which imports field, entity, and Lite<T>).
+function assertFieldTransform(input: string, expected: string): void {
+    const result = transformSourceWithField(FIELD_HEADER + input);
+    const headerNorm = normalize(getPrintedFieldHeader());
+    const resultNorm = normalize(result);
+    expect(resultNorm.startsWith(headerNorm)).toBe(true);
+    const body = resultNorm.slice(headerNorm.length).trim();
+    expect(body).toBe(normalize(expected));
+}
+
+// Like assertFullTransform but resolves query-of-t (for import-injection tests).
+function assertFullFieldTransform(input: string, expected: string): void {
+    expect(normalize(transformSourceWithField(input))).toBe(normalize(expected));
 }
 
 describe('quote-transformer', () => {
@@ -190,51 +286,37 @@ nonEmpty = Object.assign((a: string) => a.length > 0 && a != "", {
     });
 
     test('field decorator infers runtime type', () => {
-        assertSimpleTransform(
-            `function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-class Lite<T> { }
-class Person {
+        assertFieldTransform(
+            `class Person {
     @field isActive!: boolean;
     @field dateOfBirth!: Date;
     @field dateOfDeath!: Date | null;
     @field bestFriend!: Lite<Person> | null;
     @field otherFriends!: Person[];
 }`,
-            `function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-class Lite<T> { }
-class Person {
+            `class Person {
     @field(() => Boolean) isActive!: boolean;
     @field(() => Date) dateOfBirth!: Date;
-    @field(() => Date) dateOfDeath!: Date | null;
-    @field(() => Person, { container: () => Lite }) bestFriend!: Lite<Person> | null;
+    @field(() => Date, { nullable: true }) dateOfDeath!: Date | null;
+    @field(() => Person, { nullable: true, container: () => Lite }) bestFriend!: Lite<Person> | null;
     @field(() => Person, { container: () => Array }) otherFriends!: Person[];
 }`
         );
     });
 
-    test('auto-injects @field for ModifiableEntity subclasses', () => {
-        assertSimpleTransform(
-            `function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-function ignore(_value: undefined, _context: ClassFieldDecoratorContext): void { }
-class Lite<T> { }
-abstract class ModifiableEntity { }
-class PersonEntity extends ModifiableEntity {
+    test('auto-injects @field for @entity classes', () => {
+        assertFieldTransform(
+            `function ignore(_value: undefined, _context: ClassFieldDecoratorContext): void { }
+@entity
+class PersonEntity {
     name!: string;
     age!: number;
     static count: number;
     @ignore hidden!: string;
 }`,
-            `function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-function ignore(_value: undefined, _context: ClassFieldDecoratorContext): void { }
-class Lite<T> { }
-abstract class ModifiableEntity { }
-class PersonEntity extends ModifiableEntity {
+            `function ignore(_value: undefined, _context: ClassFieldDecoratorContext): void { }
+@entity
+class PersonEntity {
     @field(() => String) name!: string;
     @field(() => Number) age!: number;
     static count: number;
@@ -243,43 +325,31 @@ class PersonEntity extends ModifiableEntity {
         );
     });
 
-    test('auto-injects @field with two args for generic types in ModifiableEntity subclasses', () => {
-        assertSimpleTransform(
-            `function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-class Lite<T> { }
-abstract class ModifiableEntity { }
-class EmployeeEntity extends ModifiableEntity {
+    test('auto-injects @field with two args for generic types in @entity classes', () => {
+        assertFieldTransform(
+            `@entity
+class EmployeeEntity {
     name!: string;
     manager!: Lite<EmployeeEntity> | null;
     reports!: EmployeeEntity[];
 }`,
-            `function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-class Lite<T> { }
-abstract class ModifiableEntity { }
-class EmployeeEntity extends ModifiableEntity {
+            `@entity
+class EmployeeEntity {
     @field(() => String) name!: string;
-    @field(() => EmployeeEntity, { container: () => Lite }) manager!: Lite<EmployeeEntity> | null;
+    @field(() => EmployeeEntity, { nullable: true, container: () => Lite }) manager!: Lite<EmployeeEntity> | null;
     @field(() => EmployeeEntity, { container: () => Array }) reports!: EmployeeEntity[];
 }`
         );
     });
 
     test('field decorator resolves primitive type aliases to options bag', () => {
-        assertSimpleTransform(
+        assertFieldTransform(
             `type int = number;
-function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
 class Order {
     @field quantity!: int;
     @field price!: number;
 }`,
             `type int = number;
-function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
 class Order {
     @field(() => Number, { name: "int" }) quantity!: int;
     @field(() => Number) price!: number;
@@ -288,19 +358,13 @@ class Order {
     });
 
     test('field decorator handles nullable element in container', () => {
-        assertSimpleTransform(
+        assertFieldTransform(
             `type int = number;
-function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
 class Order {
     @field nums!: (int | null)[];
     @field tags!: string[];
 }`,
             `type int = number;
-function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => unknown, options?: { name?: string; nullable?: boolean; container?: () => unknown; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
 class Order {
     @field(() => Number, { name: "int", nullable: true, container: () => Array }) nums!: (int | null)[];
     @field(() => String, { container: () => Array }) tags!: string[];
@@ -309,21 +373,60 @@ class Order {
     });
 
     test('field decorator handles enum types', () => {
-        assertSimpleTransform(
+        assertFieldTransform(
             `enum Color { Red, Green, Blue }
-function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => unknown, options?: { name?: string; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
 class Item {
     @field color!: Color;
     @field name!: string;
 }`,
             `enum Color { Red, Green, Blue }
-function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => unknown, options?: { name?: string; }): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
 class Item {
     @field(() => Color, { name: "Color" }) color!: Color;
+    @field(() => String) name!: string;
+}`
+        );
+    });
+
+    test('field decorator handles field-level nullable', () => {
+        assertFieldTransform(
+            `class Order {
+    @field amount!: number | null;
+    @field middleName!: string | null;
+    @field nums!: number[] | null;
+}`,
+            `class Order {
+    @field(() => Number, { nullable: true }) amount!: number | null;
+    @field(() => String, { nullable: true }) middleName!: string | null;
+    @field(() => Number, { container: () => Array }) nums!: number[] | null;
+}`
+        );
+    });
+
+    test('@field(false) suppresses auto-inject', () => {
+        assertFieldTransform(
+            `@entity
+class Order {
+    @field(false) name!: string;
+    amount!: number;
+}`,
+            `@entity
+class Order {
+    @field(false) name!: string;
+    @field(() => Number) amount!: number;
+}`
+        );
+    });
+
+    test('auto-inject adds field to existing query-of-t import', () => {
+        assertFullFieldTransform(
+            `import { entity } from "query-of-t";
+@entity
+class Person {
+    name!: string;
+}`,
+            `import { entity, field } from "query-of-t";
+@entity
+class Person {
     @field(() => String) name!: string;
 }`
         );

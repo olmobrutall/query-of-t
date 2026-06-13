@@ -70,9 +70,9 @@ class Person {
     isActive!: boolean;
     @field(() => Date)
     dateOfBirth!: Date;
-    @field(() => Date)
+    @field(() => Date, { nullable: true })
     dateOfDeath!: Date | null;
-    @field(() => Person, { container: () => Lite })
+    @field(() => Person, { nullable: true, container: () => Lite })
     bestFriend!: Lite<Person> | null;
     @field(() => Person, { container: () => Array })
     otherFriends!: Person[];

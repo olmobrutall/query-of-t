@@ -101,6 +101,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
 
   const printer = ts.createPrinter();
   let generatedExParam = false;
+  let needsFieldImport = false;
 
   function addQuoteError(sourceFile: ts.SourceFile, quote: QuoteError): void {
     addDiagnostic({
@@ -234,10 +235,21 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
   }
 
   function isFieldDecorator(modifier: ts.ModifierLike): boolean {
-    return ts.isDecorator(modifier) && (
-      (ts.isIdentifier(modifier.expression) && modifier.expression.text == "field") ||
-      (ts.isCallExpression(modifier.expression) && ts.isIdentifier(modifier.expression.expression) && modifier.expression.expression.text == "field")
-    );
+    if (!ts.isDecorator(modifier)) return false;
+    if (ts.isIdentifier(modifier.expression) && modifier.expression.text == "field") return true;
+    if (ts.isCallExpression(modifier.expression) && ts.isIdentifier(modifier.expression.expression) && modifier.expression.expression.text == "field") {
+      const args = modifier.expression.arguments;
+      return !(args.length === 1 && args[0].kind === ts.SyntaxKind.FalseKeyword);
+    }
+    return false;
+  }
+
+  function isFieldFalseDecorator(modifier: ts.ModifierLike): boolean {
+    if (!ts.isDecorator(modifier)) return false;
+    if (!ts.isCallExpression(modifier.expression)) return false;
+    if (!ts.isIdentifier(modifier.expression.expression) || modifier.expression.expression.text !== "field") return false;
+    const args = modifier.expression.arguments;
+    return args.length === 1 && args[0].kind === ts.SyntaxKind.FalseKeyword;
   }
 
   function isIgnoreDecorator(modifier: ts.ModifierLike): boolean {
@@ -245,6 +257,15 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
       (ts.isIdentifier(modifier.expression) && modifier.expression.text == "ignore") ||
       (ts.isCallExpression(modifier.expression) && ts.isIdentifier(modifier.expression.expression) && modifier.expression.expression.text == "ignore")
     );
+  }
+
+  function hasEntityDecorator(node: ts.ClassDeclaration): boolean {
+    return node.modifiers?.some(m =>
+      ts.isDecorator(m) && (
+        (ts.isIdentifier(m.expression) && m.expression.text === "entity") ||
+        (ts.isCallExpression(m.expression) && ts.isIdentifier(m.expression.expression) && m.expression.expression.text === "entity")
+      )
+    ) ?? false;
   }
 
   function hasThisReference(node: ts.Node): boolean {
@@ -423,26 +444,29 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     );
   }
 
-  // Walks the type-checker heritage chain to check if ModifiableEntity appears anywhere.
-  function extendsModifiableEntity(node: ts.ClassDeclaration): boolean {
-    try {
-      const type = typeChecker.getTypeAtLocation(node) as ts.InterfaceType;
+  // Adds 'field' to an existing 'query-of-t' import if it's not already there.
+  function ensureFieldImport(sourceFile: ts.SourceFile): ts.SourceFile {
+    const hasFieldImport = sourceFile.statements.some(stmt => {
+      if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier) || stmt.moduleSpecifier.text !== 'query-of-t') return false;
+      const nb = stmt.importClause?.namedBindings;
+      return nb != null && ts.isNamedImports(nb) && nb.elements.some(e => e.name.text === 'field');
+    });
+    if (hasFieldImport) return sourceFile;
 
-      function hasModifiableBase(t: ts.InterfaceType): boolean {
-        const bases = typeChecker.getBaseTypes(t);
-        for (const base of bases) {
-          if (base.symbol?.name === 'ModifiableEntity')
-            return true;
-          if (hasModifiableBase(base as ts.InterfaceType))
-            return true;
-        }
-        return false;
-      }
-
-      return hasModifiableBase(type);
-    } catch {
-      return false;
-    }
+    let patched = false;
+    const newStatements = sourceFile.statements.map(stmt => {
+      if (patched || !ts.isImportDeclaration(stmt)) return stmt;
+      if (!ts.isStringLiteral(stmt.moduleSpecifier) || stmt.moduleSpecifier.text !== 'query-of-t') return stmt;
+      const nb = stmt.importClause?.namedBindings;
+      if (nb == null || !ts.isNamedImports(nb)) return stmt;
+      patched = true;
+      const newEl = ts.factory.createImportSpecifier(false, undefined, ts.factory.createIdentifier('field'));
+      const newNb = ts.factory.updateNamedImports(nb, [...nb.elements, newEl]);
+      const clause = stmt.importClause!;
+      const newClause = ts.factory.updateImportClause(clause, clause.phaseModifier, clause.name, newNb);
+      return ts.factory.updateImportDeclaration(stmt, stmt.modifiers, newClause, stmt.moduleSpecifier, stmt.attributes);
+    });
+    return patched ? ts.factory.updateSourceFile(sourceFile, newStatements) : sourceFile;
   }
 
   // Computes the @field factory args from a type annotation node.
@@ -489,7 +513,9 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     const stripped = extractNull(type);
     if (stripped) {
       type = stripped.cleanType;
-      if (insideContainer) elementNullable = true;
+      while (ts.isParenthesizedTypeNode(type)) type = type.type;
+      if (!ts.isArrayTypeNode(type))
+        elementNullable = true;
     }
 
     // T[] — array shorthand
@@ -505,7 +531,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
       if (outerRef == null) return null;
       const inner = resolveElementType(type.typeArguments[0], true);
       if (inner == null) return null;
-      return { ...inner, containerRef: outerRef };
+      return { ...inner, containerRef: outerRef, nullable: elementNullable ?? inner.nullable };
     }
 
     if (ts.isTypeReferenceNode(type) && !type.typeArguments?.length && ts.isIdentifier(type.typeName)) {
@@ -563,7 +589,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     );
   }
 
-  // Injects @field decorators for properties in a ModifiableEntity subclass that are missing them.
+  // Injects @field decorators for properties in a class decorated with @entity that are missing them.
   function injectMissingFieldDecorators(node: ts.ClassDeclaration, sourceFile: ts.SourceFile): ts.ClassDeclaration {
     const newMembers = node.members.map((member): ts.ClassElement => {
       if (!ts.isPropertyDeclaration(member))
@@ -574,7 +600,8 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
 
       const hasField = member.modifiers?.some(m => isFieldDecorator(m)) ?? false;
       const hasIgnore = member.modifiers?.some(m => isIgnoreDecorator(m)) ?? false;
-      if (hasField || hasIgnore || !member.type) return member;
+      const hasFieldFalse = member.modifiers?.some(m => isFieldFalseDecorator(m)) ?? false;
+      if (hasField || hasIgnore || hasFieldFalse || !member.type) return member;
 
       const factories = buildFieldFactories(member.type);
       if (factories == null) {
@@ -582,6 +609,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
         return member;
       }
 
+      needsFieldImport = true;
       const fieldCall = ts.factory.createCallExpression(
         ts.factory.createIdentifier("field"),
         undefined,
@@ -614,6 +642,7 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
 
     return (sourceFile: ts.SourceFile) => {
       generatedExParam = false;
+      needsFieldImport = false;
       let quotedContextDepth = 0;
       let msgModuleName: string | null = null;
       let msgMemberName: string | null = null;
@@ -728,10 +757,10 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
 
         if (ts.isClassDeclaration(node)) {
           // Check BEFORE visiting children (type checker works on original AST)
-          const isModifiable = extendsModifiableEntity(node);
+          const isEntity = hasEntityDecorator(node);
           const visited = ts.visitEachChild(node, visit, ctx) as ts.ClassDeclaration;
 
-          if (!isModifiable)
+          if (!isEntity)
             return visited;
 
           return injectMissingFieldDecorators(visited, sourceFile);
@@ -778,10 +807,8 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
       }
 
       const transformed = ts.visitNode(sourceFile, visit) as ts.SourceFile;
-      if (!generatedExParam)
-        return transformed;
-
-      return ensureQuotedImportHasExParam(transformed);
+      const withExParam = generatedExParam ? ensureQuotedImportHasExParam(transformed) : transformed;
+      return needsFieldImport ? ensureFieldImport(withExParam) : withExParam;
 
     };
   };
