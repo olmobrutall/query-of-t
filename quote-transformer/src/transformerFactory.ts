@@ -444,21 +444,24 @@ export default function transformerFactory(program: ts.Program, pluginConfig: Pl
     );
   }
 
-  // Adds 'field' to an existing 'query-of-t' import if it's not already there.
+  // Adds 'field' to whatever import already brings in 'entity'.
+  // Works regardless of the module path (query-of-t, ./decorators, etc.).
   function ensureFieldImport(sourceFile: ts.SourceFile): ts.SourceFile {
+    // If 'field' is already imported anywhere, nothing to do
     const hasFieldImport = sourceFile.statements.some(stmt => {
-      if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier) || stmt.moduleSpecifier.text !== 'query-of-t') return false;
+      if (!ts.isImportDeclaration(stmt)) return false;
       const nb = stmt.importClause?.namedBindings;
       return nb != null && ts.isNamedImports(nb) && nb.elements.some(e => e.name.text === 'field');
     });
     if (hasFieldImport) return sourceFile;
 
+    // Find the import that has 'entity' and add 'field' alongside it
     let patched = false;
     const newStatements = sourceFile.statements.map(stmt => {
       if (patched || !ts.isImportDeclaration(stmt)) return stmt;
-      if (!ts.isStringLiteral(stmt.moduleSpecifier) || stmt.moduleSpecifier.text !== 'query-of-t') return stmt;
       const nb = stmt.importClause?.namedBindings;
       if (nb == null || !ts.isNamedImports(nb)) return stmt;
+      if (!nb.elements.some(e => e.name.text === 'entity')) return stmt;
       patched = true;
       const newEl = ts.factory.createImportSpecifier(false, undefined, ts.factory.createIdentifier('field'));
       const newNb = ts.factory.updateNamedImports(nb, [...nb.elements, newEl]);
