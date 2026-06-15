@@ -52,7 +52,9 @@ export function allowUnauthenticated(target: Function): void {
 }
 
 export function ignore(_value: undefined, _context: ClassFieldDecoratorContext): void {
-    // Field is intentionally excluded from schema — no FieldInfo registered
+    const key = String(_context.name);
+    const typeInfo = getOrCreateTypeInfo(_context.metadata!);
+    getOrCreateFieldInfo(typeInfo, key).ignore = true;
 }
 
 export function fkProperty(propertyName: string) {

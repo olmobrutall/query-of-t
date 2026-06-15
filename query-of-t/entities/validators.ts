@@ -1,7 +1,7 @@
 
 import { getOrCreateTypeInfo, getOrCreateFieldInfo, Validator } from './reflection';
 import type { FieldInfo } from './reflection';
-import type { ModifiableEntity } from './modifiable';
+import type { BaseEntity } from './entity';
 import { msg } from './utils/localization';
 
 export { Validator } from './reflection';
@@ -54,7 +54,7 @@ export class StringLengthValidator extends Validator {
         return 'be a string';
     }
 
-    protected overrideError(value: unknown, _entity: ModifiableEntity, fi: FieldInfo): string | null {
+    protected overrideError(value: unknown, _entity: BaseEntity, fi: FieldInfo): string | null {
         const s = value as string | null | undefined;
         if (s == null || s === '') return null;
         const { min, max } = this.options;
@@ -78,7 +78,7 @@ export class UrlValidator extends Validator {
     isCompatibleWith(type: Function) { return type === String; }
     get helpMessage() { return 'be a valid URL'; }
 
-    protected overrideError(value: unknown, _entity: ModifiableEntity, fi: FieldInfo): string | null {
+    protected overrideError(value: unknown, _entity: BaseEntity, fi: FieldInfo): string | null {
         const s = value as string | null | undefined;
         if (s == null || s === '') return null;
         return urlRegex.test(s) ? null : ValidationMessage._0DoesNotHaveAValid1Format.niceToString(fi.niceToString(), 'URL');
@@ -97,7 +97,7 @@ export class TelephoneValidator extends Validator {
     isCompatibleWith(type: Function) { return type === String; }
     get helpMessage() { return 'be a valid telephone number'; }
 
-    protected overrideError(value: unknown, _entity: ModifiableEntity, fi: FieldInfo): string | null {
+    protected overrideError(value: unknown, _entity: BaseEntity, fi: FieldInfo): string | null {
         const s = value as string | null | undefined;
         if (s == null || s === '') return null;
         return telephoneRegex.test(s) ? null : ValidationMessage._0DoesNotHaveAValid1Format.niceToString(fi.niceToString(), 'telephone number');
@@ -116,7 +116,7 @@ export class EmailValidator extends Validator {
     isCompatibleWith(type: Function) { return type === String; }
     get helpMessage() { return 'be a valid e-mail address'; }
 
-    protected overrideError(value: unknown, _entity: ModifiableEntity, fi: FieldInfo): string | null {
+    protected overrideError(value: unknown, _entity: BaseEntity, fi: FieldInfo): string | null {
         const s = value as string | null | undefined;
         if (s == null || s === '') return null;
         return emailRegex.test(s) ? null : ValidationMessage._0DoesNotHaveAValid1Format.niceToString(fi.niceToString(), 'e-mail address');
@@ -133,7 +133,7 @@ export class NoRepeatValidator extends Validator {
     isCompatibleWith(type: Function) { return type === Array; }
     get helpMessage() { return 'have no repeated elements'; }
 
-    protected overrideError(value: unknown, _entity: ModifiableEntity, fi: FieldInfo): string | null {
+    protected overrideError(value: unknown, _entity: BaseEntity, fi: FieldInfo): string | null {
         const list = value as unknown[] | null | undefined;
         if (list == null || list.length <= 1) return null;
         const seen = new Set<unknown>();

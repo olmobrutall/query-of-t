@@ -3,7 +3,9 @@
     "version": "1.0.0",
     "description": "",
     "scripts": {
-        "build": "tsc --build"
+        "build": "tsc --build",
+        "build:react": "tsc --build tsconfig.react.json",
+        "build:logic": "tsc --build tsconfig.logic.json"
     },
     "author": "Olmo del Corral",
     "license": "MIT",
@@ -15,5 +17,8 @@
     "dependencies": {
         "pg": "^8.11.3",
         "typescript": "^6.0.3"
+    },
+    "devDependencies": {
+        "@types/node": "^24.0.0"
     }
 }

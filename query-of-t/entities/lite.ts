@@ -1,6 +1,5 @@
 
-import type { Entity } from './entity';
-import type { PrimaryKey } from './primaryKey';
+import type { Entity, PrimaryKey } from './entity';
 
 export abstract class Lite<out T extends Entity> {
     abstract readonly id: PrimaryKey;

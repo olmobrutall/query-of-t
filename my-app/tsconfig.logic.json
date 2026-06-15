@@ -1,0 +1,14 @@
+{
+    "extends": "./tsconfig.json",
+    "include": [
+        "src/server/**/*"
+    ],
+    "exclude": [
+        "src/ui/**/*"
+    ],
+    "references": [
+        {
+            "path": "../query-of-t/tsconfig.logic.json"
+        }
+    ]
+}

@@ -1,5 +1,5 @@
 
-import type { IContextVariable, IContextStorage } from '../context';
+import type { IContextVariable, IContextStorage } from './context';
 
 export class LocalizableMessage {
     private _inferred?: string;

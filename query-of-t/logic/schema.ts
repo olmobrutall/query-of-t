@@ -1,5 +1,5 @@
 
-import { FieldInfo, getOrCreateTypeInfo } from "../entities/reflection";
+import { getOrCreateFieldInfo, getOrCreateTypeInfo } from "../entities/reflection";
 import type { ColumnOptions } from "../entities/reflection";
 
 export { ColumnOptions };
@@ -60,8 +60,7 @@ export function column(options: ColumnOptions = {}) {
         };
 
         const typeInfo = getOrCreateTypeInfo(context.metadata);
-        const existing = (typeInfo.fields[key] ?? { name: key }) as FieldInfo;
-        existing.name = key;
+        const existing = getOrCreateFieldInfo(typeInfo, key);
         existing.columnOptions = normalizedOptions;
         typeInfo.fields[key] = existing;
     };

@@ -1,0 +1,14 @@
+{
+    "extends": "./tsconfig.json",
+    "include": [
+        "src/ui/**/*"
+    ],
+    "exclude": [
+        "src/server/**/*"
+    ],
+    "references": [
+        {
+            "path": "../query-of-t/tsconfig.react.json"
+        }
+    ]
+}

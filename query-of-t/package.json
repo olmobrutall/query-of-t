@@ -6,6 +6,8 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tspc --build",
+    "build:react": "tspc --build tsconfig.react.json",
+    "build:logic": "tspc --build tsconfig.logic.json",
     "patch-ts": "ts-patch install -s"
   },
   "keywords": [],

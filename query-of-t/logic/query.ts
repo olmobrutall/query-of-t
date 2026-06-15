@@ -1,7 +1,7 @@
 
 import { ExLambda, Quoted } from "quote-transformer/quoted";
-import { CallExpression, ConstantExpression, Expression, LambdaExpression, PropertyExpression } from "./expresions";
-import { ArrayType, LiteralType as SimpleType, ClassType, Type, FunctionType, ObjectType } from "./types";
+import { CallExpression, ConstantExpression, Expression, LambdaExpression, PropertyExpression } from "./expressions";
+import { ArrayType, LiteralType as SimpleType, ClassType, Type, FunctionType, ObjectType } from "../entities/types";
 
 export type LambdaTypeResolver = (thisType: Type, ...argsTypes: Type[]) => Type[];
 export type ResultTypeResolver = (thisType: Type, ...argsTypes: Type[]) => Type;

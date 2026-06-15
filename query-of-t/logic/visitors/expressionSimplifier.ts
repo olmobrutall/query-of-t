@@ -1,6 +1,6 @@
 
 import { OpBinary, OpUnary } from "quote-transformer/quoted";
-import { BinaryExpression, CallExpression, ConditionalExpression, ConstantExpression, Expression, LambdaExpression, NewExpression, ObjectExpression, ParameterExpression, PropertyExpression, UnaryExpression } from "../../entities/expresions";
+import { BinaryExpression, CallExpression, ConditionalExpression, ConstantExpression, Expression, LambdaExpression, NewExpression, ObjectExpression, ParameterExpression, PropertyExpression, UnaryExpression } from "../expressions";
 import { LiteralType, Type } from "../../entities/types";
 
 

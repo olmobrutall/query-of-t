@@ -1,7 +1,7 @@
 
 import { Entity } from "../entities/entity";
-import { CallExpression, ConstantExpression, Expression } from "../entities/expresions";
-import { asStaticFunction, IQueryTranslator, Query } from "../entities/query";
+import { CallExpression, ConstantExpression, Expression } from "./expressions";
+import { asStaticFunction, IQueryTranslator, Query } from "./query";
 import { ArrayType, FunctionType, ClassType, Type } from "../entities/types";
 import { expressionSimplifier } from "./visitors/expressionSimplifier";
 

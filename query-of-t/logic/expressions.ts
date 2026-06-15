@@ -1,7 +1,7 @@
 
 import { isOptionalChain } from "typescript";
 import { ExLambda, OpBinary, OpUnary, Quoted, QuotedEx, ExParam } from 'quote-transformer/quoted';
-import { ArrayType, FunctionType as FunctionType, LiteralType, ClassType, ObjectType, Type } from "./types";
+import { ArrayType, FunctionType as FunctionType, LiteralType, ClassType, ObjectType, Type } from "../entities/types";
 import { getLambdaTypeResolvers, getResultTypeResolver, LambdaTypeResolver, OrderedQuery, Query, ResultTypeResolver, StaticFunction } from "./query";
 
 type Visitor = (e: Expression) => Expression;

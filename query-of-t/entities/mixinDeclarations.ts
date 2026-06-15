@@ -1,5 +1,5 @@
 
-import type { ModifiableEntity } from './modifiable';
+import type { BaseEntity } from './entity';
 import { getOrCreateTypeInfo } from './reflection';
 
 const mixinDeclarationsKey = Symbol.for('query-of-t:mixinDeclarations');
@@ -11,7 +11,7 @@ if (symbolWithMetadata.metadata == null) {
 const metadataSymbol: symbol = symbolWithMetadata.metadata;
 
 export namespace MixinDeclarations {
-    export function register<T extends ModifiableEntity, M>(
+    export function register<T extends BaseEntity, M>(
         target: new () => T,
         mixin: new () => M,
     ): void {
@@ -22,13 +22,13 @@ export namespace MixinDeclarations {
         metadata[mixinDeclarationsKey] = mixins;
     }
 
-    export function getMixins(target: new () => ModifiableEntity): (new () => unknown)[] {
+    export function getMixins(target: new () => BaseEntity): (new () => unknown)[] {
         const metadata = (target as any)[metadataSymbol];
         return metadata?.[mixinDeclarationsKey] ?? [];
     }
 }
 
-export function mixin(target: new () => ModifiableEntity) {
+export function mixin(target: new () => BaseEntity) {
     return function (mixinClass: new () => unknown): void {
         MixinDeclarations.register(target, mixinClass);
     };

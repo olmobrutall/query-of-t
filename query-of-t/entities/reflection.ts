@@ -26,10 +26,12 @@ export interface FieldOptions {
 }
 
 export class FieldInfo {
+    readonly name: string;
     type: () => unknown = () => Object;
     containerType?: () => unknown;
     kind?: string;
     isNullable?: boolean;
+    ignore: boolean = false;
     fkPropertyName?: string;
     implementations?: ImplementationsInfo;
     columnOptions?: ColumnOptions;
@@ -108,7 +110,7 @@ export function getTypeInfo(target: object): TypeInfo | undefined {
     return metadata?.[typeInfoMetadataKey] as TypeInfo | undefined;
 }
 
-function isFieldContext(value: unknown): value is ClassFieldDecoratorContext | ClassAccessorDecoratorContext {
+function isFieldContext(value: unknown): value is ClassFieldDecoratorContext {
     if (value == null || typeof value !== 'object')
         return false;
 
@@ -116,7 +118,7 @@ function isFieldContext(value: unknown): value is ClassFieldDecoratorContext | C
     return kind === 'field' || kind === 'accessor';
 }
 
-export function field(value: undefined, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext): void;
+export function field(value: undefined, context: ClassFieldDecoratorContext): void;
 export function field(type: () => unknown, options?: FieldOptions): (value: unknown, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext) => void;
 export function field(arg1: unknown, arg2?: unknown): unknown {
     if (isFieldContext(arg2)) {
@@ -129,7 +131,7 @@ export function field(arg1: unknown, arg2?: unknown): unknown {
     const typeFactory = arg1 as () => unknown;
     const options = (arg2 != null && typeof arg2 === 'object') ? arg2 as FieldOptions : undefined;
 
-    return function (_value: unknown, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext) {
+    return function (_value: unknown, context: ClassFieldDecoratorContext) {
         if (context.metadata == null)
             throw new Error('Decorator metadata is required but not available in this runtime');
 

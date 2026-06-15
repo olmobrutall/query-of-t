@@ -1,0 +1,11 @@
+{
+    "files": [],
+    "references": [
+        {
+            "path": "query-of-t/tsconfig.logic.json"
+        },
+        {
+            "path": "my-app/tsconfig.logic.json"
+        }
+    ]
+}

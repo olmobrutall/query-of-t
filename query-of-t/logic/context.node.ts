@@ -1,6 +1,6 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { Statics } from '../entities/context';
+import { Statics } from '../entities/utils/context';
 
 Statics.newContextVariable = <T>() => {
     const storage = new AsyncLocalStorage<T>();
