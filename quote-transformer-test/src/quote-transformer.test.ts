@@ -1,6 +1,4 @@
-import * as ts from 'typescript';
-import * as path from 'path';
-import transformerFactory from 'quote-transformer';
+import { transformSource, normalize } from './transform-utils';
 
 // Header already includes ExParam so it won't be modified by the transformer,
 // keeping it out of the expected strings for assertSimpleTransform.
@@ -15,44 +13,6 @@ function withQuoted<T extends Function>(f: T, quoted?: () => ExLambda): T {
     return f;
 }
 `;
-
-function transformSource(source: string): string {
-    const fileName = path.join(process.cwd(), '__test__.ts');
-    const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.ESNext, true);
-
-    const defaultHost = ts.createCompilerHost({});
-    const customHost: ts.CompilerHost = {
-        ...defaultHost,
-        getSourceFile: (name, languageVersion) => {
-            if (path.normalize(name) === path.normalize(fileName))
-                return sourceFile;
-            return defaultHost.getSourceFile(name, languageVersion);
-        },
-        fileExists: (name) => path.normalize(name) === path.normalize(fileName) || defaultHost.fileExists(name),
-        readFile: (name) => path.normalize(name) === path.normalize(fileName) ? source : defaultHost.readFile(name),
-    };
-
-    const program = ts.createProgram([fileName], {
-        target: ts.ScriptTarget.ESNext,
-        module: ts.ModuleKind.CommonJS,
-        moduleResolution: ts.ModuleResolutionKind.Node10,
-        experimentalDecorators: true,
-        skipLibCheck: true,
-        strict: false,
-    }, customHost);
-
-    const transformer = transformerFactory(program, undefined, {
-        ts,
-        addDiagnostic: () => 0,
-    } as any);
-
-    const result = ts.transform(sourceFile, [transformer]);
-    return ts.createPrinter().printFile(result.transformed[0]);
-}
-
-function normalize(s: string): string {
-    return s.replace(/\s+/g, ' ').trim();
-}
 
 let cachedPrintedHeader: string | null = null;
 function getPrintedHeader(): string {
@@ -186,83 +146,6 @@ nonEmpty = (a: string) => a.length > 0 && a != "";`,
 nonEmpty = Object.assign((a: string) => a.length > 0 && a != "", {
     __quoted: (): ExLambda => ((a: ExParam) => ["=>", [a], ["&&", [">", [".", a, "length"], ["c", 0]], ["!=", a, ["c", ""]]]])(["p", "a"])
 });`
-        );
-    });
-
-    test('field decorator infers runtime type', () => {
-        assertSimpleTransform(
-            `function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-class Lite<T> { }
-class Person {
-    @field isActive!: boolean;
-    @field dateOfBirth!: Date;
-    @field dateOfDeath!: Date | null;
-    @field bestFriend!: Lite<Person> | null;
-    @field otherFriends!: Person[];
-}`,
-            `function field(value: undefined, context: ClassFieldDecoratorContext): void;
-function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-class Lite<T> { }
-class Person {
-    @field(() => Boolean) isActive!: boolean;
-    @field(() => Date) dateOfBirth!: Date;
-    @field(() => Date) dateOfDeath!: Date | null;
-    @field(() => Lite, () => Person) bestFriend!: Lite<Person> | null;
-    @field(() => Array, () => Person) otherFriends!: Person[];
-}`
-        );
-    });
-
-    test('auto-injects @field for ModifiableEntity subclasses', () => {
-        assertSimpleTransform(
-            `function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-function ignore(_value: undefined, _context: ClassFieldDecoratorContext): void { }
-class Lite<T> { }
-abstract class ModifiableEntity { }
-class PersonEntity extends ModifiableEntity {
-    name!: string;
-    age!: number;
-    static count: number;
-    @ignore hidden!: string;
-}`,
-            `function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-function ignore(_value: undefined, _context: ClassFieldDecoratorContext): void { }
-class Lite<T> { }
-abstract class ModifiableEntity { }
-class PersonEntity extends ModifiableEntity {
-    @field(() => String) name!: string;
-    @field(() => Number) age!: number;
-    static count: number;
-    @ignore hidden!: string;
-}`
-        );
-    });
-
-    test('auto-injects @field with two args for generic types in ModifiableEntity subclasses', () => {
-        assertSimpleTransform(
-            `function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-class Lite<T> { }
-abstract class ModifiableEntity { }
-class EmployeeEntity extends ModifiableEntity {
-    name!: string;
-    manager!: Lite<EmployeeEntity> | null;
-    reports!: EmployeeEntity[];
-}`,
-            `function field(type: () => Function, innerType?: () => Function): (value: undefined, context: ClassFieldDecoratorContext) => void;
-function field(..._args: any[]) { return function () { }; }
-class Lite<T> { }
-abstract class ModifiableEntity { }
-class EmployeeEntity extends ModifiableEntity {
-    @field(() => String) name!: string;
-    @field(() => Lite, () => EmployeeEntity) manager!: Lite<EmployeeEntity> | null;
-    @field(() => Array, () => EmployeeEntity) reports!: EmployeeEntity[];
-}`
         );
     });
 

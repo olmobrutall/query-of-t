@@ -19,10 +19,16 @@ export type ImplementationsInfo =
     | { kind: 'implementedByAll' };
 
 
+export interface FieldOptions {
+    name?: string;
+    nullable?: boolean;
+    container?: () => unknown;
+}
+
 export class FieldInfo {
-    readonly name: string;
-    type: () => Function = () => Object;
-    innerType?: () => Function;
+    type: () => unknown = () => Object;
+    containerType?: () => unknown;
+    kind?: string;
     isNullable?: boolean;
     fkPropertyName?: string;
     implementations?: ImplementationsInfo;
@@ -111,7 +117,7 @@ function isFieldContext(value: unknown): value is ClassFieldDecoratorContext | C
 }
 
 export function field(value: undefined, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext): void;
-export function field(type: () => Function, innerType?: () => Function): (value: unknown, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext) => void;
+export function field(type: () => unknown, options?: FieldOptions): (value: unknown, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext) => void;
 export function field(arg1: unknown, arg2?: unknown): unknown {
     if (isFieldContext(arg2)) {
         throw new Error('@field without type should be rewritten by the compiler to @field(() => Type)');
@@ -120,8 +126,8 @@ export function field(arg1: unknown, arg2?: unknown): unknown {
     if (typeof arg1 !== 'function')
         throw new Error('@field expects a type factory: @field(() => Type)');
 
-    const typeFactory = arg1 as () => Function;
-    const innerTypeFactory = typeof arg2 === 'function' ? arg2 as () => Function : undefined;
+    const typeFactory = arg1 as () => unknown;
+    const options = (arg2 != null && typeof arg2 === 'object') ? arg2 as FieldOptions : undefined;
 
     return function (_value: unknown, context: ClassFieldDecoratorContext | ClassAccessorDecoratorContext) {
         if (context.metadata == null)
@@ -131,7 +137,11 @@ export function field(arg1: unknown, arg2?: unknown): unknown {
         const typeInfo = getOrCreateTypeInfo(context.metadata);
         const fi = getOrCreateFieldInfo(typeInfo, key);
         fi.type = typeFactory;
-        if (innerTypeFactory != null)
-            fi.innerType = innerTypeFactory;
+        if (options?.name != null)
+            fi.kind = options.name;
+        if (options?.nullable != null)
+            fi.isNullable = options.nullable;
+        if (options?.container != null)
+            fi.containerType = options.container;
     };
 }
